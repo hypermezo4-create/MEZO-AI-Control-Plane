@@ -1,5 +1,6 @@
 import json
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from typing import Any, cast
 from uuid import uuid4
 
@@ -7,34 +8,53 @@ from redis.asyncio import Redis
 
 from mezo_control_plane.core.domain import TaskRecord, TaskState
 from mezo_control_plane.queue.priorities import TaskPriority
+from mezo_control_plane.queue.producer import QueueInfrastructureError
 
+_READY_COUNT = len(TaskPriority)
 _CLAIM_SCRIPT = """
-for i=1,#KEYS do
+for i=1,ARGV[1] do
   local item=redis.call('LPOP', KEYS[i])
   if item then
-    local decoded=cjson.decode(item)
-    decoded.owner_token=ARGV[1]
-    local claimed=cjson.encode(decoded)
-    redis.call('HSET', KEYS[#KEYS], decoded.message_id, claimed)
-    return claimed
+    local envelope=cjson.decode(item)
+    if redis.call('SISMEMBER', KEYS[8], envelope.task_id) == 1 then
+      redis.call('HDEL', KEYS[5], envelope.message_id)
+    else
+      envelope.owner_token=ARGV[2]
+      envelope.worker_id=ARGV[3]
+      envelope.claimed_at=ARGV[4]
+      envelope.lease_expires_at=ARGV[5]
+      local encoded=cjson.encode(envelope)
+      local lease=cjson.encode({message_id=envelope.message_id,task_id=envelope.task_id,
+        worker_id=ARGV[3],owner_token=ARGV[2],claimed_at=ARGV[4],
+        lease_expires_at=ARGV[5],attempt=envelope.attempt})
+      redis.call('HSET', KEYS[5], envelope.message_id, encoded)
+      redis.call('HSET', KEYS[6], envelope.message_id, lease)
+      redis.call('ZADD', KEYS[7], ARGV[6], envelope.message_id)
+      return encoded
+    end
   end
 end
 return false
 """
 _ACK_SCRIPT = """
-if redis.call('HEXISTS', KEYS[1], ARGV[1]) == 1 then
-  local payload=redis.call('HGET', KEYS[1], ARGV[1])
-  local decoded=cjson.decode(payload)
-  if decoded.owner_token == ARGV[2] then redis.call('HDEL', KEYS[1], ARGV[1]); return 1 end
-end
-return 0
+local lease=redis.call('HGET', KEYS[2], ARGV[1])
+if not lease then return 0 end
+local metadata=cjson.decode(lease)
+if metadata.owner_token ~= ARGV[2] then return -1 end
+redis.call('HDEL', KEYS[1], ARGV[1])
+redis.call('HDEL', KEYS[2], ARGV[1])
+redis.call('ZREM', KEYS[3], ARGV[1])
+return 1
 """
 _RENEW_SCRIPT = """
-local payload=redis.call('HGET', KEYS[1], ARGV[1])
-if not payload then return 0 end
-local decoded=cjson.decode(payload)
-if decoded.owner_token ~= ARGV[2] then return 0 end
-return redis.call('EXPIRE', KEYS[2], ARGV[3])
+local lease=redis.call('HGET', KEYS[2], ARGV[1])
+if not lease or redis.call('SISMEMBER', KEYS[4], ARGV[3]) == 1 then return 0 end
+local metadata=cjson.decode(lease)
+if metadata.owner_token ~= ARGV[2] then return -1 end
+metadata.lease_expires_at=ARGV[4]
+redis.call('HSET', KEYS[2], ARGV[1], cjson.encode(metadata))
+redis.call('ZADD', KEYS[3], ARGV[5], ARGV[1])
+return 1
 """
 
 
@@ -44,51 +64,89 @@ class ClaimedTask:
     message_id: str
     owner_token: str
     attempt: int
+    lease_expires_at: datetime
 
 
 class TaskConsumer:
-    def __init__(self, redis: Redis, worker_id: str) -> None:
+    def __init__(self, redis: Redis, worker_id: str, prefix: str = "mezo:queue") -> None:
         self._redis = redis
         self._worker_id = worker_id
+        self._prefix = prefix
 
-    async def claim(self) -> ClaimedTask | None:
+    async def claim(self, visibility_seconds: int = 60) -> ClaimedTask | None:
+        now = datetime.now(UTC)
+        expiry = now.timestamp() + visibility_seconds
         owner_token = f"{self._worker_id}:{uuid4()}"
-        keys = [*(f"mezo:queue:ready:{int(item)}" for item in TaskPriority), "mezo:queue:inflight"]
-        raw = await cast(Any, self._redis.eval(_CLAIM_SCRIPT, len(keys), *keys, owner_token))
-        if raw is None:
+        ready = [f"{self._prefix}:ready:{int(priority)}" for priority in TaskPriority]
+        keys = [
+            *ready,
+            f"{self._prefix}:inflight",
+            f"{self._prefix}:leases",
+            f"{self._prefix}:lease-expiry",
+            f"{self._prefix}:cancelled",
+        ]
+        try:
+            raw = await cast(
+                Any,
+                self._redis.eval(
+                    _CLAIM_SCRIPT,
+                    len(keys),
+                    *keys,
+                    str(_READY_COUNT),
+                    owner_token,
+                    self._worker_id,
+                    now.isoformat(),
+                    datetime.fromtimestamp(expiry, UTC).isoformat(),
+                    str(expiry),
+                ),
+            )
+        except Exception as error:
+            raise QueueInfrastructureError("Redis claim operation failed") from error
+        if not raw:
             return None
         envelope = json.loads(raw)
-        await cast(
-            Any, self._redis.expire(f"mezo:queue:lease:{envelope['message_id']}", 60)
-        )
         task = TaskRecord.model_validate(envelope["task"])
         if task.state in {TaskState.COMPLETED, TaskState.FAILED, TaskState.CANCELLED}:
-            await cast(Any, self._redis.hdel("mezo:queue:inflight", envelope["message_id"]))
             return None
-        return ClaimedTask(task, envelope["message_id"], owner_token, int(envelope["attempt"]))
+        return ClaimedTask(
+            task=task,
+            message_id=envelope["message_id"],
+            owner_token=owner_token,
+            attempt=int(envelope["attempt"]),
+            lease_expires_at=datetime.fromisoformat(envelope["lease_expires_at"]),
+        )
 
     async def acknowledge(self, claimed: ClaimedTask) -> bool:
         result = await cast(
             Any,
             self._redis.eval(
-                _ACK_SCRIPT, 1, "mezo:queue:inflight", claimed.message_id, claimed.owner_token
+                _ACK_SCRIPT,
+                3,
+                f"{self._prefix}:inflight",
+                f"{self._prefix}:leases",
+                f"{self._prefix}:lease-expiry",
+                claimed.message_id,
+                claimed.owner_token,
             ),
         )
-        return bool(result)
+        return int(result) == 1
 
     async def renew_lease(self, claimed: ClaimedTask, visibility_seconds: int = 60) -> bool:
-        if visibility_seconds < 1:
-            raise ValueError("Visibility timeout must be positive")
+        expiry = datetime.now(UTC).timestamp() + visibility_seconds
         result = await cast(
             Any,
             self._redis.eval(
                 _RENEW_SCRIPT,
-                2,
-                "mezo:queue:inflight",
-                f"mezo:queue:lease:{claimed.message_id}",
+                4,
+                f"{self._prefix}:inflight",
+                f"{self._prefix}:leases",
+                f"{self._prefix}:lease-expiry",
+                f"{self._prefix}:cancelled",
                 claimed.message_id,
                 claimed.owner_token,
-                str(visibility_seconds),
+                str(claimed.task.id),
+                datetime.fromtimestamp(expiry, UTC).isoformat(),
+                str(expiry),
             ),
         )
-        return bool(result)
+        return int(result) == 1
