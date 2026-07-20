@@ -10,6 +10,8 @@ from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
 
 from mezo_control_plane.api.schemas import ErrorDetail, ErrorEnvelope
+from mezo_control_plane.observability.metrics import MetricsRegistry
+from mezo_control_plane.observability.tracing import tracing_boundary
 
 logger = logging.getLogger("mezo.api")
 
@@ -35,7 +37,7 @@ class AuthenticationMiddleware(BaseHTTPMiddleware):
         self._api_key = api_key
 
     async def dispatch(self, request: Request, call_next: RequestResponseEndpoint) -> Response:
-        exempt = {"/health/live", "/health/ready", "/v1/webhooks/github"}
+        exempt = {"/dashboard", "/health/live", "/health/ready", "/v1/webhooks/github"}
         if request.url.path in exempt:
             return await call_next(request)
         provided = request.headers.get("x-api-key", "")
@@ -101,6 +103,32 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
             return response
         bucket.append(now)
         return await call_next(request)
+
+
+class MetricsMiddleware(BaseHTTPMiddleware):
+    def __init__(self, app: object, registry: MetricsRegistry) -> None:
+        super().__init__(app)  # type: ignore[arg-type]
+        self._registry = registry
+
+    async def dispatch(self, request: Request, call_next: RequestResponseEndpoint) -> Response:
+        started = time.perf_counter()
+        status_code = 500
+        trace_id = getattr(request.state, "request_id", None)
+        with tracing_boundary(
+            "http.request",
+            {"method": request.method, "route": request.url.path},
+            trace_id=trace_id,
+        ):
+            try:
+                response = await call_next(request)
+                status_code = response.status_code
+                return response
+            finally:
+                matched_route = getattr(request.scope.get("route"), "path", None)
+                route_label = matched_route if isinstance(matched_route, str) else "__unmatched__"
+                self._registry.observe_request(
+                    request.method, route_label, status_code, time.perf_counter() - started
+                )
 
 
 class AuditLogMiddleware(BaseHTTPMiddleware):

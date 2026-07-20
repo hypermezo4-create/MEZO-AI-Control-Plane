@@ -14,6 +14,7 @@ from mezo_control_plane.application.tasks import TaskApplicationService
 from mezo_control_plane.core.domain import ModelRequest, ModelResponse
 from mezo_control_plane.core.settings import Settings
 from mezo_control_plane.database.base import Base
+from mezo_control_plane.database.evidence_ledger import EvidenceLedgerRepository
 from mezo_control_plane.database.repositories import TaskRepository
 from mezo_control_plane.database.session import create_engine, create_session_factory
 from mezo_control_plane.model_router.router import ModelRole, ModelRouter, Route
@@ -190,6 +191,15 @@ async def test_authenticated_api_worker_provider_and_telegram_flow(
             "queue-claim",
             "execution-result",
         }
+        report = await client.get(
+            f"/v1/tasks/{task_id}/report",
+            headers={"x-api-key": "integration-control-key"},
+        )
+        assert report.status_code == 200
+        assert len(report.json()["evidence_digest"]) == 64
+        ledger = EvidenceLedgerRepository(repository.session_factory)
+        assert await ledger.verify(task_id)
+        assert len(await ledger.entries(task_id)) == 2
     recorder = TelegramRecorder()
     bot = TelegramControlSurface(
         service,

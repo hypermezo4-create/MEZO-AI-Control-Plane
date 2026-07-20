@@ -37,6 +37,7 @@ def test_phase_07_12_migration_upgrade_and_downgrade() -> None:
                 "policy_decision_records",
                 "approval_records",
                 "draft_pr_deliveries",
+                "evidence_ledger",
             } <= tables
             checkpoint_uniques = {
                 item["name"]
@@ -50,6 +51,11 @@ def test_phase_07_12_migration_upgrade_and_downgrade() -> None:
                 item["name"] for item in inspect(engine).get_unique_constraints("approval_records")
             }
             assert "approval_records_approval_id_key" in approval_uniques
+            ledger_uniques = {
+                item["name"]
+                for item in inspect(engine).get_unique_constraints("evidence_ledger")
+            }
+            assert "uq_evidence_ledger_task_sequence" in ledger_uniques
         finally:
             engine.dispose()
         command.downgrade(configuration, "0001_task_evidence_audit")
@@ -57,6 +63,7 @@ def test_phase_07_12_migration_upgrade_and_downgrade() -> None:
         try:
             tables = set(inspect(engine).get_table_names())
             assert "workflow_checkpoints" not in tables
+            assert "evidence_ledger" not in tables
             assert "tasks" in tables
         finally:
             engine.dispose()

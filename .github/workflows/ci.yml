@@ -46,13 +46,15 @@ jobs:
       - run: python -m pip install -e '.[dev]'
       - run: ruff check .
       - run: mypy src
+      - run: python scripts/verify_migrations.py
       - run: pytest -q tests/unit
       - run: pytest -q tests/security
       - run: pytest -q tests/integration
       - run: pytest -q tests/contract
       - run: pytest -q tests/end_to_end
+      - run: mezo-evals
       - run: pytest -q
-      - run: python -m compileall -q src tests
+      - run: python -m compileall -q src tests scripts
 
   docker:
     runs-on: ubuntu-latest
