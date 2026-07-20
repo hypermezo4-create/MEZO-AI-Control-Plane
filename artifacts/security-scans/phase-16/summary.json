@@ -1,0 +1,36 @@
+{
+  "generated_at": "2026-07-20T19:08:08.622005+00:00",
+  "phase": "16",
+  "result": "pass",
+  "scope": "final working tree and final local runtime image",
+  "tools": {
+    "gitleaks": {
+      "findings": 0,
+      "image": "zricethezav/gitleaks@sha256:c00b6bd0aeb3071cbcb79009cb16a60dd9e0a7c60e2be9ab65d25e6bc8abbb7f",
+      "scope_exclusions": [
+        ".git",
+        ".venv",
+        "artifacts",
+        "__pycache__"
+      ]
+    },
+    "pip-audit": {
+      "input": "requirements.lock",
+      "known_vulnerabilities": 0
+    },
+    "trivy_filesystem": {
+      "high_or_critical_misconfigurations": 0,
+      "high_or_critical_vulnerabilities": 0,
+      "image": "aquasec/trivy@sha256:cffe3f5161a47a6823fbd23d985795b3ed72a4c806da4c4df16266c02accdd6f",
+      "secrets": 0
+    },
+    "trivy_runtime_image": {
+      "high_or_critical_misconfigurations": 0,
+      "high_or_critical_vulnerabilities": 0,
+      "image": "aquasec/trivy@sha256:cffe3f5161a47a6823fbd23d985795b3ed72a4c806da4c4df16266c02accdd6f",
+      "secrets": 0,
+      "target": "mezo-ai-control-plane:local"
+    }
+  },
+  "unresolved": []
+}
