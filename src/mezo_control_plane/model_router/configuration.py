@@ -22,6 +22,12 @@ class RoutingConfig(BaseModel):
 
 def load_router(path: Path, providers: dict[str, ModelProvider]) -> ModelRouter:
     config = RoutingConfig.model_validate(yaml.safe_load(path.read_text(encoding="utf-8")))
+    return router_from_config(config, providers)
+
+
+def router_from_config(
+    config: RoutingConfig, providers: dict[str, ModelProvider]
+) -> ModelRouter:
     routes: dict[ModelRole, list[Route]] = {}
     for role, candidates in config.routes.items():
         routes[role] = []

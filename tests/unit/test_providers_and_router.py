@@ -1,6 +1,5 @@
 import asyncio
 import json
-from pathlib import Path
 from typing import cast
 
 import httpx
@@ -8,7 +7,7 @@ import pytest
 from pydantic import BaseModel
 
 from mezo_control_plane.core.domain import ModelMessage, ModelRequest, ModelResponse
-from mezo_control_plane.model_router.configuration import load_router
+from mezo_control_plane.model_router.configuration import RoutingConfig, router_from_config
 from mezo_control_plane.model_router.router import (
     BlindReviewContext,
     ModelRole,
@@ -310,18 +309,27 @@ def test_provider_failures_map_to_worker_retry_and_permanent_decisions() -> None
     assert not denied.retryable
 
 
-def test_startup_rejects_unknown_provider_and_model(tmp_path: Path) -> None:
-    unknown_provider = tmp_path / "unknown-provider.yaml"
-    unknown_provider.write_text(
-        "version: 1\nroutes:\n  fast:\n    - {provider: missing, model: model}\n",
-        encoding="utf-8",
+def test_startup_rejects_unknown_provider_and_model() -> None:
+    unknown_provider = RoutingConfig.model_validate(
+        {
+            "version": 1,
+            "routes": {"fast": [{"provider": "missing", "model": "model"}]},
+        }
     )
     with pytest.raises(ValueError, match="Unknown provider"):
-        load_router(unknown_provider, {"static": cast(ModelProvider, StaticProvider())})
-    unknown_model = tmp_path / "unknown-model.yaml"
-    routes = "\n".join(
-        f"  {role.value}:\n    - {{provider: static, model: unknown}}" for role in ModelRole
+        router_from_config(
+            unknown_provider, {"static": cast(ModelProvider, StaticProvider())}
+        )
+    unknown_model = RoutingConfig.model_validate(
+        {
+            "version": 1,
+            "routes": {
+                role.value: [{"provider": "static", "model": "unknown"}]
+                for role in ModelRole
+            },
+        }
     )
-    unknown_model.write_text(f"version: 1\nroutes:\n{routes}\n", encoding="utf-8")
     with pytest.raises(ValueError, match="Unknown model"):
-        load_router(unknown_model, {"static": cast(ModelProvider, StaticProvider())})
+        router_from_config(
+            unknown_model, {"static": cast(ModelProvider, StaticProvider())}
+        )
