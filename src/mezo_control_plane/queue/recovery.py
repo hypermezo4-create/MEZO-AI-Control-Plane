@@ -38,6 +38,9 @@ if ARGV[4] == 'dlq' then
   redis.call('HINCRBY', KEYS[9], 'recoveries', 1)
   return 'dead-lettered'
 end
+if redis.call('HEXISTS', KEYS[5], ARGV[1]) == 1 then
+  return 'retry-already-scheduled'
+end
 redis.call('HSETNX', KEYS[5], ARGV[1], ARGV[5])
 redis.call('ZADD', KEYS[6], ARGV[6], ARGV[1])
 redis.call('HINCRBY', KEYS[9], 'recoveries', 1)

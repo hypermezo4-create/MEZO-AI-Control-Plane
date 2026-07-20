@@ -74,6 +74,7 @@ class ClaimedTask:
     owner_token: str
     attempt: int
     lease_expires_at: datetime
+    priority: TaskPriority = TaskPriority.NORMAL
 
 
 class TaskConsumer:
@@ -122,6 +123,7 @@ class TaskConsumer:
             owner_token=owner_token,
             attempt=int(envelope["attempt"]),
             lease_expires_at=datetime.fromisoformat(envelope["lease_expires_at"]),
+            priority=TaskPriority(int(envelope["priority"])),
         )
 
     async def acknowledge(self, claimed: ClaimedTask) -> bool:

@@ -32,9 +32,7 @@ local envelope=record.envelope
 envelope.message_id=ARGV[2]
 envelope.owner_token=nil; envelope.worker_id=nil; envelope.claimed_at=nil
 envelope.lease_expires_at=nil
-record.replayed_message_id=ARGV[2]
-record.replayed_at=ARGV[3]
-redis.call('HSET', KEYS[1], ARGV[1], cjson.encode(record))
+redis.call('HSET', KEYS[1], ARGV[1], ARGV[4])
       redis.call('RPUSH', KEYS[4 + tonumber(envelope.priority)], cjson.encode(envelope))
 return {1,ARGV[2]}
 """
@@ -183,6 +181,10 @@ class DeadLetterQueue:
         if record is None:
             return ReplayResult.NOT_FOUND, None
         new_message_id = str(uuid4())
+        replayed_at = datetime.now(UTC)
+        updated_record = record.model_copy(
+            update={"replayed_message_id": new_message_id, "replayed_at": replayed_at}
+        )
         ready = [f"{self._prefix}:ready:{priority}" for priority in range(4)]
         try:
             result = await cast(
@@ -196,7 +198,8 @@ class DeadLetterQueue:
                     *ready,
                     record.message_id,
                     new_message_id,
-                    datetime.now(UTC).isoformat(),
+                    replayed_at.isoformat(),
+                    updated_record.model_dump_json(),
                 ),
             )
         except Exception as error:

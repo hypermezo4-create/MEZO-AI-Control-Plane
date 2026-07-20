@@ -2,7 +2,9 @@ import asyncio
 from collections.abc import Awaitable, Callable, Coroutine
 from typing import Any
 
+from mezo_control_plane.queue.cancellation import CancellationService
 from mezo_control_plane.queue.consumer import ClaimedTask, TaskConsumer
+from mezo_control_plane.queue.producer import QueueInfrastructureError
 from mezo_control_plane.worker.execution import DurableExecutionGateway, ExecutionHandler
 from mezo_control_plane.worker.failure_classification import (
     ExecutionFailure,
@@ -31,6 +33,7 @@ class WorkerRuntime:
         heartbeat_interval_seconds: float = 10,
         maintenance_interval_seconds: float = 1,
         maintenance: tuple[MaintenanceOperation, ...] = (),
+        cancellation_service: CancellationService | None = None,
     ) -> None:
         if concurrency < 1 or visibility_seconds < 3:
             raise ValueError("Worker concurrency and visibility timeout must be positive")
@@ -46,10 +49,12 @@ class WorkerRuntime:
         self._heartbeat_interval = heartbeat_interval_seconds
         self._maintenance_interval = maintenance_interval_seconds
         self._maintenance = maintenance
+        self._cancellation_service = cancellation_service
         self._active: dict[str, asyncio.Task[None]] = {}
         self._draining = asyncio.Event()
         self._stopped = asyncio.Event()
         self._background: set[asyncio.Task[None]] = set()
+        self._background_failures = 0
 
     @property
     def active_count(self) -> int:
@@ -64,7 +69,11 @@ class WorkerRuntime:
                 if len(self._active) >= self._capacity:
                     await asyncio.sleep(0)
                     continue
-                delivery = await self._consumer.claim(self._visibility_seconds)
+                try:
+                    delivery = await self._consumer.claim(self._visibility_seconds)
+                except QueueInfrastructureError:
+                    await asyncio.sleep(self._maintenance_interval)
+                    continue
                 if delivery is None:
                     await asyncio.sleep(0.01)
                     continue
@@ -98,6 +107,8 @@ class WorkerRuntime:
         renewal = asyncio.create_task(self._renewal_loop(delivery, cancellation, ownership_lost))
         handler_task: asyncio.Future[str] | None = None
         try:
+            if self._cancellation_service is not None:
+                self._cancellation_service.register_running(str(delivery.task.id), cancellation)
             await self._persistence.record_claim(delivery, self._worker_id)
             handler_task = asyncio.ensure_future(self._handler(delivery, cancellation))
             ownership_waiter = asyncio.create_task(ownership_lost.wait())
@@ -130,6 +141,8 @@ class WorkerRuntime:
             await self._persistence.record_failure(delivery, failure)
             await self._failure_dispatcher(delivery, failure)
         finally:
+            if self._cancellation_service is not None:
+                self._cancellation_service.unregister_running(str(delivery.task.id))
             cancellation.set()
             if handler_task is not None and not handler_task.done():
                 handler_task.cancel()
@@ -153,13 +166,20 @@ class WorkerRuntime:
 
     async def _heartbeat_loop(self) -> None:
         while not self._stopped.is_set():
-            await self._registry.heartbeat(self.active_count, self._draining.is_set())
+            try:
+                await self._registry.heartbeat(self.active_count, self._draining.is_set())
+            except QueueInfrastructureError:
+                self._background_failures += 1
             await asyncio.sleep(self._heartbeat_interval)
 
     async def _maintenance_loop(self) -> None:
         while not self._stopped.is_set():
             for operation in self._maintenance:
-                await operation()
+                try:
+                    await operation()
+                except QueueInfrastructureError:
+                    self._background_failures += 1
+                    continue
             await asyncio.sleep(self._maintenance_interval)
 
     def _spawn_background(self, coroutine: Coroutine[Any, Any, None]) -> None:

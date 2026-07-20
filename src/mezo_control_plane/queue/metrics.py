@@ -67,7 +67,7 @@ class QueueMetricsCollector:
             pipe.hgetall(f"{self._prefix}:metric-samples")
             values = await cast(Any, pipe.execute())
             workers = []
-            async for key in self._redis.scan_iter(match=f"{self._prefix}:worker:*"):
+            async for key in self._redis.scan_iter(match=f"{self._prefix}:workers:*"):
                 raw = await cast(Any, self._redis.get(key))
                 if raw:
                     workers.append(json.loads(raw))
