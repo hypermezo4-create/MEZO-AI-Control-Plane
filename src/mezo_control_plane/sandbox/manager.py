@@ -4,6 +4,7 @@ import asyncio
 import os
 import re
 import signal
+import sys
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from enum import StrEnum
@@ -101,8 +102,8 @@ class CommandRunner:
             stdin=asyncio.subprocess.PIPE if command.stdin is not None else None,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
-            creationflags=0x00000200 if os.name == "nt" else 0,
-            start_new_session=os.name != "nt",
+            creationflags=0x00000200 if sys.platform == "win32" else 0,
+            start_new_session=sys.platform != "win32",
         )
         communicate = asyncio.create_task(process.communicate(command.stdin))
         cancel_wait = asyncio.create_task((cancellation or asyncio.Event()).wait())
@@ -205,10 +206,10 @@ def new_sandbox(
 def _terminate_process_group(process: asyncio.subprocess.Process) -> None:
     if process.returncode is not None:
         return
-    if os.name == "nt":
+    if sys.platform == "win32":
         process.terminate()
     else:
-        os.killpg(process.pid, signal.SIGTERM)  # type: ignore[attr-defined]
+        os.killpg(process.pid, signal.SIGTERM)
 
 
 def _looks_secret(key: str) -> bool:
