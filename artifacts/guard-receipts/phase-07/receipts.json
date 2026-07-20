@@ -1,0 +1,49 @@
+{
+  "phase": "07",
+  "reviewed_commit_range": "16dd6911b2087c9d3387cb8a2dd08d22f57ec4ad..ae69f21",
+  "receipts": [
+    {
+      "skill": "agent-system-guard", "version": "1.0.0", "commit": "f4253e666fbe18f4b591520daf75c019a521dfa4",
+      "scope": ["src/mezo_control_plane/agents", "src/mezo_control_plane/orchestrator"],
+      "findings": [{"severity": "important", "path": "src/mezo_control_plane/orchestrator/workflow.py", "evidence": "The prior engine only planned and authorized paths.", "risk": "No bounded resumable delivery workflow.", "fix": "Added typed agent contracts and ResumableWorkflowEngine checkpoints, budgets, cancellation and loop fingerprints."}],
+      "corrections": ["Implemented role isolation and bounded stage execution."], "unresolved": [],
+      "evidence_commands": ["pytest -q tests/unit/test_agents_workflow.py", "mypy src"],
+      "revisit": "Any prompt, agent input, stage, or tool-authority change", "result": "pass"
+    },
+    {
+      "skill": "architecture-guard", "version": "1.0.0", "commit": "f4253e666fbe18f4b591520daf75c019a521dfa4",
+      "scope": ["src/mezo_control_plane/agents", "src/mezo_control_plane/orchestrator", "docs/architecture/decisions/0002-models-propose-control-plane-executes.md"],
+      "findings": [{"severity": "advisory", "path": "src/mezo_control_plane/agents/runtime.py", "evidence": "One generic TypedAgent serves all five roles.", "risk": "Role policy could drift at call sites.", "fix": "Role-specific Pydantic inputs/outputs, prompts and ModelRole mapping constrain the generic runtime."}],
+      "corrections": ["Documented the control-plane execution boundary in ADR 0002."], "unresolved": [],
+      "evidence_commands": ["ruff check .", "mypy src"], "revisit": "Adding a sixth agent role", "result": "pass"
+    },
+    {
+      "skill": "concurrency-guard", "version": "1.0.0", "commit": "f4253e666fbe18f4b591520daf75c019a521dfa4",
+      "scope": ["src/mezo_control_plane/orchestrator/checkpoints.py", "src/mezo_control_plane/orchestrator/engine.py"],
+      "findings": [{"severity": "important", "path": "src/mezo_control_plane/orchestrator/checkpoints.py", "evidence": "Duplicate stage calls needed a stable idempotency unit.", "risk": "A crash could repeat stage side effects.", "fix": "Checkpoint uniqueness uses task, stage and input hash; resume advances from the latest sequence."}],
+      "corrections": ["Added lock-protected checkpoint append and duplicate-stage tests."], "unresolved": [],
+      "evidence_commands": ["pytest -q tests/unit/test_agents_workflow.py"], "revisit": "Persistent checkpoint repository implementation changes", "result": "pass"
+    },
+    {
+      "skill": "clean-code-guard", "version": "1.0.0", "commit": "f4253e666fbe18f4b591520daf75c019a521dfa4",
+      "scope": ["src/mezo_control_plane/agents", "src/mezo_control_plane/orchestrator"],
+      "findings": [{"severity": "advisory", "path": "src/mezo_control_plane/agents/prompts.py", "evidence": "Legacy prompt constants were unversioned.", "risk": "Execution evidence could not reproduce prompt identity.", "fix": "Replaced with VersionedPrompt records while retaining compatibility aliases."}],
+      "corrections": ["Removed unversioned-only prompt ownership."], "unresolved": [],
+      "evidence_commands": ["ruff check ."], "revisit": "Prompt resource format changes", "result": "pass"
+    },
+    {
+      "skill": "test-guard", "version": "1.0.0", "commit": "f4253e666fbe18f4b591520daf75c019a521dfa4",
+      "scope": ["tests/unit/test_agents_workflow.py"],
+      "findings": [{"severity": "advisory", "path": "tests/unit/test_agents_workflow.py", "evidence": "Workflow behavior must be tested as state-in/state-out.", "risk": "Prompt wording tests would be brittle.", "fix": "Tests assert checkpoint, resume, cancellation, repeat termination and blind-input contracts."}],
+      "corrections": ["Kept tests independent of exact prompt prose."], "unresolved": [],
+      "evidence_commands": ["pytest -q tests/unit/test_agents_workflow.py"], "revisit": "Workflow stage changes", "result": "pass"
+    },
+    {
+      "skill": "docs-guard", "version": "1.0.0", "commit": "f4253e666fbe18f4b591520daf75c019a521dfa4",
+      "scope": ["docs/agents.md", "docs/workflow.md"],
+      "findings": [{"severity": "advisory", "path": "README.md", "evidence": "The integration-boundary paragraph described implemented functions as future work.", "risk": "Documentation contradicted runtime behavior.", "fix": "Updated README and added source-backed agent/workflow documentation."}],
+      "corrections": ["Verified named classes and stages against source."], "unresolved": [],
+      "evidence_commands": ["rg -n 'ResumableWorkflowEngine|TypedAgent' src docs"], "revisit": "Agent or workflow public contract changes", "result": "pass"
+    }
+  ]
+}
