@@ -21,6 +21,7 @@ dependencies = [
   "structlog>=25,<26",
   "pyyaml>=6,<7",
   "cryptography>=44,<49",
+  "psycopg[binary]>=3.2,<4",
 ]
 
 [project.optional-dependencies]

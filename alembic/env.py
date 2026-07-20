@@ -3,6 +3,7 @@ from logging.config import fileConfig
 from sqlalchemy import engine_from_config, pool
 
 from alembic import context
+from mezo_control_plane.database import control_records  # noqa: F401
 from mezo_control_plane.database.base import Base
 
 config = context.config
