@@ -122,38 +122,44 @@ class TaskConsumer:
     async def acknowledge(self, claimed: ClaimedTask) -> bool:
         if not claimed.owner_token.startswith(f"{self._worker_id}:"):
             return False
-        result = await cast(
-            Any,
-            self._redis.eval(
-                _ACK_SCRIPT,
-                3,
-                f"{self._prefix}:inflight",
-                f"{self._prefix}:leases",
-                f"{self._prefix}:lease-expiry",
-                claimed.message_id,
-                claimed.owner_token,
-            ),
-        )
+        try:
+            result = await cast(
+                Any,
+                self._redis.eval(
+                    _ACK_SCRIPT,
+                    3,
+                    f"{self._prefix}:inflight",
+                    f"{self._prefix}:leases",
+                    f"{self._prefix}:lease-expiry",
+                    claimed.message_id,
+                    claimed.owner_token,
+                ),
+            )
+        except Exception as error:
+            raise QueueInfrastructureError("Redis acknowledgement operation failed") from error
         return int(result) == 1
 
     async def renew_lease(self, claimed: ClaimedTask, visibility_seconds: int = 60) -> bool:
         if not claimed.owner_token.startswith(f"{self._worker_id}:"):
             return False
         expiry = datetime.now(UTC).timestamp() + visibility_seconds
-        result = await cast(
-            Any,
-            self._redis.eval(
-                _RENEW_SCRIPT,
-                4,
-                f"{self._prefix}:inflight",
-                f"{self._prefix}:leases",
-                f"{self._prefix}:lease-expiry",
-                f"{self._prefix}:cancelled",
-                claimed.message_id,
-                claimed.owner_token,
-                str(claimed.task.id),
-                datetime.fromtimestamp(expiry, UTC).isoformat(),
-                str(expiry),
-            ),
-        )
+        try:
+            result = await cast(
+                Any,
+                self._redis.eval(
+                    _RENEW_SCRIPT,
+                    4,
+                    f"{self._prefix}:inflight",
+                    f"{self._prefix}:leases",
+                    f"{self._prefix}:lease-expiry",
+                    f"{self._prefix}:cancelled",
+                    claimed.message_id,
+                    claimed.owner_token,
+                    str(claimed.task.id),
+                    datetime.fromtimestamp(expiry, UTC).isoformat(),
+                    str(expiry),
+                ),
+            )
+        except Exception as error:
+            raise QueueInfrastructureError("Redis lease renewal operation failed") from error
         return int(result) == 1
