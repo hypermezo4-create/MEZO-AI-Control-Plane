@@ -45,7 +45,7 @@ _ACK_SCRIPT = """
 local lease=redis.call('HGET', KEYS[2], ARGV[1])
 if not lease then return 0 end
 local metadata=cjson.decode(lease)
-if metadata.owner_token ~= ARGV[2] then
+if metadata.owner_token ~= ARGV[2] or metadata.worker_id ~= ARGV[3] then
   redis.call('HINCRBY', KEYS[5], 'wrong_owner_acknowledgements', 1); return -1
 end
 if redis.call('SISMEMBER', KEYS[4], metadata.task_id) == 1 then return -2 end
@@ -59,7 +59,7 @@ _RENEW_SCRIPT = """
 local lease=redis.call('HGET', KEYS[2], ARGV[1])
 if not lease or redis.call('SISMEMBER', KEYS[4], ARGV[3]) == 1 then return 0 end
 local metadata=cjson.decode(lease)
-if metadata.owner_token ~= ARGV[2] then
+if metadata.owner_token ~= ARGV[2] or metadata.worker_id ~= ARGV[6] then
   redis.call('HINCRBY', KEYS[5], 'wrong_owner_renewals', 1); return -1
 end
 metadata.lease_expires_at=ARGV[4]
@@ -131,8 +131,6 @@ class TaskConsumer:
         )
 
     async def acknowledge(self, claimed: ClaimedTask) -> bool:
-        if not claimed.owner_token.startswith(f"{self._worker_id}:"):
-            return False
         try:
             result = await cast(
                 Any,
@@ -146,6 +144,7 @@ class TaskConsumer:
                     f"{self._prefix}:metric-counters",
                     claimed.message_id,
                     claimed.owner_token,
+                    self._worker_id,
                 ),
             )
         except Exception as error:
@@ -153,8 +152,6 @@ class TaskConsumer:
         return int(result) == 1
 
     async def renew_lease(self, claimed: ClaimedTask, visibility_seconds: int = 60) -> bool:
-        if not claimed.owner_token.startswith(f"{self._worker_id}:"):
-            return False
         expiry = datetime.now(UTC).timestamp() + visibility_seconds
         try:
             result = await cast(
@@ -172,6 +169,7 @@ class TaskConsumer:
                     str(claimed.task.id),
                     datetime.fromtimestamp(expiry, UTC).isoformat(),
                     str(expiry),
+                    self._worker_id,
                 ),
             )
         except Exception as error:
