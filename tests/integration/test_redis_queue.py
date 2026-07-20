@@ -8,6 +8,7 @@ from mezo_control_plane.core.domain import TaskRecord, TaskRequest
 from mezo_control_plane.queue.consumer import TaskConsumer
 from mezo_control_plane.queue.priorities import TaskPriority
 from mezo_control_plane.queue.producer import TaskProducer
+from mezo_control_plane.queue.recovery import LeaseRecovery
 
 
 @pytest.fixture
@@ -64,3 +65,13 @@ async def test_wrong_owner_cannot_renew_lease(redis_queue: tuple[Redis, str]) ->
     assert claimed is not None
     assert not await TaskConsumer(redis, "worker-b", prefix).renew_lease(claimed)
     assert await TaskConsumer(redis, "worker-a", prefix).renew_lease(claimed)
+
+
+async def test_expired_lease_is_recovered_once(redis_queue: tuple[Redis, str]) -> None:
+    redis, prefix = redis_queue
+    await TaskProducer(redis, prefix).enqueue(task(), "submission-recovery")
+    claimed = await TaskConsumer(redis, "worker-a", prefix).claim(visibility_seconds=0)
+    assert claimed is not None
+    recovery = LeaseRecovery(redis, prefix)
+    assert (await recovery.recover_expired()).recovered == 1
+    assert (await recovery.recover_expired()).recovered == 0

@@ -1,3 +1,4 @@
+# ruff: noqa: E501
 import json
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -6,7 +7,7 @@ from uuid import uuid4
 
 from redis.asyncio import Redis
 
-from mezo_control_plane.core.domain import TaskRecord, TaskState
+from mezo_control_plane.core.domain import TaskRecord
 from mezo_control_plane.queue.priorities import TaskPriority
 from mezo_control_plane.queue.producer import QueueInfrastructureError
 
@@ -16,8 +17,11 @@ for i=1,ARGV[1] do
   local item=redis.call('LPOP', KEYS[i])
   if item then
     local envelope=cjson.decode(item)
-    if redis.call('SISMEMBER', KEYS[8], envelope.task_id) == 1 then
+    local task=cjson.decode(envelope.task_json)
+    if redis.call('SISMEMBER', KEYS[8], envelope.task_id) == 1 or task.state == 'completed' or task.state == 'failed' or task.state == 'cancelled' then
       redis.call('HDEL', KEYS[5], envelope.message_id)
+      redis.call('HDEL', KEYS[6], envelope.message_id)
+      redis.call('ZREM', KEYS[7], envelope.message_id)
     else
       envelope.owner_token=ARGV[2]
       envelope.worker_id=ARGV[3]
@@ -26,7 +30,7 @@ for i=1,ARGV[1] do
       local encoded=cjson.encode(envelope)
       local lease=cjson.encode({message_id=envelope.message_id,task_id=envelope.task_id,
         worker_id=ARGV[3],owner_token=ARGV[2],claimed_at=ARGV[4],
-        lease_expires_at=ARGV[5],attempt=envelope.attempt})
+        lease_expires_at=ARGV[5],lease_deadline=ARGV[6],attempt=envelope.attempt})
       redis.call('HSET', KEYS[5], envelope.message_id, encoded)
       redis.call('HSET', KEYS[6], envelope.message_id, lease)
       redis.call('ZADD', KEYS[7], ARGV[6], envelope.message_id)
@@ -52,6 +56,7 @@ if not lease or redis.call('SISMEMBER', KEYS[4], ARGV[3]) == 1 then return 0 end
 local metadata=cjson.decode(lease)
 if metadata.owner_token ~= ARGV[2] then return -1 end
 metadata.lease_expires_at=ARGV[4]
+metadata.lease_deadline=ARGV[5]
 redis.call('HSET', KEYS[2], ARGV[1], cjson.encode(metadata))
 redis.call('ZADD', KEYS[3], ARGV[5], ARGV[1])
 return 1
@@ -106,8 +111,6 @@ class TaskConsumer:
             return None
         envelope = json.loads(raw)
         task = TaskRecord.model_validate_json(envelope["task_json"])
-        if task.state in {TaskState.COMPLETED, TaskState.FAILED, TaskState.CANCELLED}:
-            return None
         return ClaimedTask(
             task=task,
             message_id=envelope["message_id"],
