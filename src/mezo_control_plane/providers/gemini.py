@@ -25,9 +25,14 @@ def classify_status(response: httpx.Response) -> ProviderError:
             ProviderFailureType.PERMISSION, "Provider permission denied", retryable=False
         )
     if response.status_code == 429:
+        failure_type = (
+            ProviderFailureType.QUOTA
+            if "quota" in response.text.lower()
+            else ProviderFailureType.RATE_LIMIT
+        )
         return ProviderError(
-            ProviderFailureType.RATE_LIMIT,
-            "Provider rate limit exceeded",
+            failure_type,
+            "Provider capacity limit exceeded",
             retryable=True,
             retry_after_seconds=retry_seconds,
         )

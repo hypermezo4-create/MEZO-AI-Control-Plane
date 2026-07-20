@@ -102,9 +102,11 @@ class ModelRouter:
         response_model: type[BaseModel] | None = None,
     ) -> ModelResponse:
         failures: list[str] = []
+        budget_exhausted = False
         started_route = time.monotonic()
         for route in self._routes.get(role, []):
             if request.max_output_tokens > route.token_budget:
+                budget_exhausted = True
                 failures.append(f"{route.provider.name}/{route.model}: token budget exceeded")
                 continue
             for attempt in range(self._max_retries + 1):
@@ -184,7 +186,9 @@ class ModelRouter:
                     if attempt >= self._max_retries:
                         break
         raise ProviderError(
-            ProviderFailureType.SERVER,
+            ProviderFailureType.BUDGET_EXHAUSTED
+            if budget_exhausted
+            else ProviderFailureType.SERVER,
             "; ".join(failures) or f"No route available for {role.value}",
             retryable=True,
         )

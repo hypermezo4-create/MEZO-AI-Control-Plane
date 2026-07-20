@@ -70,6 +70,15 @@ def create_app(
             except Exception:
                 return False
 
+        async def configuration_health() -> bool:
+            api_key = configuration.control_plane_api_key.get_secret_value()
+            return bool(
+                api_key
+                and api_key != "replace-me"
+                and configuration.database_url
+                and configuration.redis_url
+            )
+
         app.state.application = TaskApplicationService(
             TaskRepository(sessions),
             TaskProducer(redis),
@@ -77,6 +86,7 @@ def create_app(
             database_health,
             redis_health,
             worker_health,
+            configuration_health,
         )
         app.state.metrics = metrics
         app.state.redis = redis

@@ -18,6 +18,7 @@ class ProviderFailureType(StrEnum):
     CONTENT_POLICY = "content_policy"
     CANCELLATION = "cancellation"
     UNKNOWN_MODEL = "unknown_model"
+    BUDGET_EXHAUSTED = "budget_exhausted"
 
 
 class ProviderError(Exception):

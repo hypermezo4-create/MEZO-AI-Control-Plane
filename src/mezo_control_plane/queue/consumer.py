@@ -45,7 +45,9 @@ _ACK_SCRIPT = """
 local lease=redis.call('HGET', KEYS[2], ARGV[1])
 if not lease then return 0 end
 local metadata=cjson.decode(lease)
-if metadata.owner_token ~= ARGV[2] then return -1 end
+if metadata.owner_token ~= ARGV[2] then
+  redis.call('HINCRBY', KEYS[5], 'wrong_owner_acknowledgements', 1); return -1
+end
 if redis.call('SISMEMBER', KEYS[4], metadata.task_id) == 1 then return -2 end
 redis.call('HDEL', KEYS[1], ARGV[1])
 redis.call('HDEL', KEYS[2], ARGV[1])
@@ -57,7 +59,9 @@ _RENEW_SCRIPT = """
 local lease=redis.call('HGET', KEYS[2], ARGV[1])
 if not lease or redis.call('SISMEMBER', KEYS[4], ARGV[3]) == 1 then return 0 end
 local metadata=cjson.decode(lease)
-if metadata.owner_token ~= ARGV[2] then return -1 end
+if metadata.owner_token ~= ARGV[2] then
+  redis.call('HINCRBY', KEYS[5], 'wrong_owner_renewals', 1); return -1
+end
 metadata.lease_expires_at=ARGV[4]
 metadata.lease_deadline=ARGV[5]
 redis.call('HSET', KEYS[2], ARGV[1], cjson.encode(metadata))

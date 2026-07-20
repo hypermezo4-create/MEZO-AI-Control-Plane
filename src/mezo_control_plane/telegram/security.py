@@ -39,7 +39,7 @@ class CallbackSigner:
             raise ValueError("Telegram callback secret must contain at least 16 characters")
         self._secret = secret.encode()
         self._lifetime = lifetime_seconds
-        self._used: set[str] = set()
+        self._used: dict[str, int] = {}
 
     def sign(self, action: str, task_id: str, now: int | None = None) -> str:
         payload = {
@@ -66,7 +66,9 @@ class CallbackSigner:
         if int(payload["expires"]) < (now or int(time.time())):
             raise CallbackValidationError("Callback has expired")
         nonce = str(payload["nonce"])
+        current = now or int(time.time())
+        self._used = {key: expiry for key, expiry in self._used.items() if expiry >= current}
         if nonce in self._used:
             raise CallbackValidationError("Callback was already used")
-        self._used.add(nonce)
+        self._used[nonce] = int(payload["expires"])
         return {"action": str(payload["action"]), "task_id": str(payload["task_id"])}

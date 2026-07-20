@@ -34,6 +34,8 @@ if cancelled then return 'cancelled-cleaned' end
 if ARGV[4] == 'dlq' then
   redis.call('HSETNX', KEYS[7], ARGV[1], ARGV[5])
   redis.call('HSET', KEYS[8], envelope.task_id, ARGV[1])
+  local deadletter=cjson.decode(ARGV[5])
+  redis.call('HSET', KEYS[10], deadletter.id, ARGV[1])
   redis.call('HINCRBY', KEYS[9], 'dlq_finalizations', 1)
   redis.call('HINCRBY', KEYS[9], 'recoveries', 1)
   return 'dead-lettered'
@@ -119,12 +121,8 @@ class LeaseRecovery:
 
     async def _recover_one(self, message_id: str, now: datetime, maximum_attempts: int) -> str:
         try:
-            envelope_raw = await cast(
-                Any, self._redis.hget(f"{self._prefix}:inflight", message_id)
-            )
-            lease_raw = await cast(
-                Any, self._redis.hget(f"{self._prefix}:leases", message_id)
-            )
+            envelope_raw = await cast(Any, self._redis.hget(f"{self._prefix}:inflight", message_id))
+            lease_raw = await cast(Any, self._redis.hget(f"{self._prefix}:leases", message_id))
         except Exception as error:
             raise QueueInfrastructureError("Redis lease recovery lookup failed") from error
         envelope = json.loads(envelope_raw) if envelope_raw else None
@@ -196,6 +194,7 @@ class LeaseRecovery:
             f"{self._prefix}:dlq",
             f"{self._prefix}:dlq-task-index",
             f"{self._prefix}:metric-counters",
+            f"{self._prefix}:dlq-record-index",
         ]
         try:
             result = await cast(

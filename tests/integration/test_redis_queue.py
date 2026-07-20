@@ -62,6 +62,7 @@ async def test_enqueue_claim_lease_and_owner_acknowledgement(
     assert claimed is not None
     assert await redis.hget(f"{prefix}:leases", claimed.message_id) is not None
     assert not await TaskConsumer(redis, "worker-b", prefix).acknowledge(claimed)
+    assert int(await redis.hget(f"{prefix}:metric-counters", "wrong_owner_acknowledgements")) == 1
     assert await TaskConsumer(redis, "worker-a", prefix).acknowledge(claimed)
     assert await redis.hget(f"{prefix}:leases", claimed.message_id) is None
 
@@ -73,6 +74,7 @@ async def test_wrong_owner_cannot_renew_lease(redis_queue: tuple[Redis, str]) ->
     claimed = await TaskConsumer(redis, "worker-a", prefix).claim()
     assert claimed is not None
     assert not await TaskConsumer(redis, "worker-b", prefix).renew_lease(claimed)
+    assert int(await redis.hget(f"{prefix}:metric-counters", "wrong_owner_renewals")) == 1
     assert await TaskConsumer(redis, "worker-a", prefix).renew_lease(claimed)
 
 
@@ -142,9 +144,7 @@ async def test_retry_schedule_and_atomic_promotion(redis_queue: tuple[Redis, str
     result = await TaskProducer(redis, prefix).enqueue(task(), "retry")
     raw = await redis.lpop(f"{prefix}:ready:{int(TaskPriority.NORMAL)}")
     envelope = json.loads(raw)
-    scheduler = RetryScheduler(
-        redis, prefix, RetryPolicy(base_delay_seconds=1, jitter_ratio=0)
-    )
+    scheduler = RetryScheduler(redis, prefix, RetryPolicy(base_delay_seconds=1, jitter_ratio=0))
     failure = ExecutionFailure(FailureClass.RETRYABLE_PROVIDER, "temporary", True)
     scheduled = await scheduler.schedule_failure(envelope, failure)
     assert scheduled.scheduled and scheduled.record is not None

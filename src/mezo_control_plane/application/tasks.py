@@ -8,6 +8,10 @@ from mezo_control_plane.queue.cancellation import CancellationResult, Cancellati
 from mezo_control_plane.queue.producer import EnqueueResult, TaskProducer
 
 
+async def _configured() -> bool:
+    return True
+
+
 @dataclass(frozen=True)
 class Page:
     items: list[TaskRecord]
@@ -27,6 +31,7 @@ class TaskApplicationService:
         database_health: HealthCheck,
         redis_health: HealthCheck,
         worker_health: HealthCheck,
+        configuration_health: HealthCheck = _configured,
     ) -> None:
         self._store = store
         self._producer = producer
@@ -34,6 +39,7 @@ class TaskApplicationService:
         self._database_health = database_health
         self._redis_health = redis_health
         self._worker_health = worker_health
+        self._configuration_health = configuration_health
 
     async def create_task(
         self, request: TaskRequest, idempotency_key: str
@@ -87,4 +93,5 @@ class TaskApplicationService:
             "postgresql": await self._database_health(),
             "redis": await self._redis_health(),
             "workers": await self._worker_health(),
+            "configuration": await self._configuration_health(),
         }

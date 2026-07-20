@@ -11,7 +11,7 @@ class Settings(BaseSettings):
     log_level: str = "INFO"
     host: str = "0.0.0.0"
     port: int = 8080
-    control_plane_api_key: SecretStr = Field(default=SecretStr("replace-me"))
+    control_plane_api_key: SecretStr = Field(default=SecretStr(""))
 
     database_url: str = "postgresql+asyncpg://mezo:mezo@localhost:5432/mezo"
     redis_url: str = "redis://localhost:6379/0"

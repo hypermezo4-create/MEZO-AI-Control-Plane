@@ -52,8 +52,15 @@ class BodyLimitMiddleware(BaseHTTPMiddleware):
 
     async def dispatch(self, request: Request, call_next: RequestResponseEndpoint) -> Response:
         content_length = request.headers.get("content-length")
-        if content_length and int(content_length) > self._maximum:
-            return error_response(request, "body_too_large", "Request body exceeds limit", 413)
+        if content_length:
+            try:
+                declared_length = int(content_length)
+            except ValueError:
+                return error_response(request, "invalid_content_length", "Invalid body length", 400)
+            if declared_length < 0:
+                return error_response(request, "invalid_content_length", "Invalid body length", 400)
+            if declared_length > self._maximum:
+                return error_response(request, "body_too_large", "Request body exceeds limit", 413)
         body = await request.body()
         if len(body) > self._maximum:
             return error_response(request, "body_too_large", "Request body exceeds limit", 413)

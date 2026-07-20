@@ -16,6 +16,7 @@ local dlq=redis.call('HGET', KEYS[6], ARGV[1])
 if not message and not dlq then return 'not_found' end
 redis.call('SADD', KEYS[1], ARGV[1])
 redis.call('HSET', KEYS[2], ARGV[1], ARGV[2])
+redis.call('HINCRBY', KEYS[7], 'cancellations', 1)
 if message then
   redis.call('HDEL', KEYS[4], message)
   redis.call('ZREM', KEYS[5], message)
@@ -84,13 +85,14 @@ class CancellationService:
                 Any,
                 self._redis.eval(
                     _CANCEL_SCRIPT,
-                    6,
+                    7,
                     f"{self._prefix}:cancelled",
                     f"{self._prefix}:cancellation-metadata",
                     f"{self._prefix}:task-index",
                     f"{self._prefix}:delayed",
                     f"{self._prefix}:delayed-due",
                     f"{self._prefix}:dlq-task-index",
+                    f"{self._prefix}:metric-counters",
                     task_id,
                     record.model_dump_json(),
                 ),
@@ -109,9 +111,7 @@ class CancellationService:
 
     async def is_cancelled(self, task_id: str) -> bool:
         try:
-            member = await cast(
-                Any, self._redis.sismember(f"{self._prefix}:cancelled", task_id)
-            )
+            member = await cast(Any, self._redis.sismember(f"{self._prefix}:cancelled", task_id))
             return bool(member)
         except Exception as error:
             raise QueueInfrastructureError("Redis cancellation lookup failed") from error

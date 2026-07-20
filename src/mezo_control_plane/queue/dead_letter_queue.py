@@ -13,6 +13,8 @@ local existing=redis.call('HGET', KEYS[1], ARGV[1])
 if existing then return {0,existing} end
 redis.call('HSET', KEYS[1], ARGV[1], ARGV[3])
 redis.call('HSET', KEYS[2], ARGV[2], ARGV[1])
+redis.call('HSET', KEYS[3], ARGV[4], ARGV[1])
+redis.call('HINCRBY', KEYS[4], 'dlq_finalizations', 1)
 return {1,ARGV[3]}
 """
 _REPLAY_SCRIPT = """
@@ -33,7 +35,8 @@ envelope.message_id=ARGV[2]
 envelope.owner_token=nil; envelope.worker_id=nil; envelope.claimed_at=nil
 envelope.lease_expires_at=nil
 redis.call('HSET', KEYS[1], ARGV[1], ARGV[4])
-      redis.call('RPUSH', KEYS[4 + tonumber(envelope.priority)], cjson.encode(envelope))
+redis.call('RPUSH', KEYS[4 + tonumber(envelope.priority)], cjson.encode(envelope))
+redis.call('HINCRBY', KEYS[8], 'dlq_replays', 1)
 return {1,ARGV[2]}
 """
 
@@ -98,12 +101,15 @@ class DeadLetterQueue:
                 Any,
                 self._redis.eval(
                     _FINALIZE_SCRIPT,
-                    2,
+                    4,
                     f"{self._prefix}:dlq",
                     f"{self._prefix}:dlq-task-index",
+                    f"{self._prefix}:dlq-record-index",
+                    f"{self._prefix}:metric-counters",
                     record.message_id,
                     record.task_id,
                     record.model_dump_json(),
+                    record.id,
                 ),
             )
         except Exception as error:
@@ -112,14 +118,14 @@ class DeadLetterQueue:
 
     async def get(self, record_id: str) -> DeadLetterRecord | None:
         try:
-            records = await cast(Any, self._redis.hvals(f"{self._prefix}:dlq"))
+            message_id = await cast(
+                Any, self._redis.hget(f"{self._prefix}:dlq-record-index", record_id)
+            )
+            lookup = message_id or record_id
+            raw = await cast(Any, self._redis.hget(f"{self._prefix}:dlq", lookup))
         except Exception as error:
             raise QueueInfrastructureError("Redis DLQ read failed") from error
-        for raw in records:
-            record = DeadLetterRecord.model_validate_json(raw)
-            if record.id == record_id or record.message_id == record_id:
-                return record
-        return None
+        return DeadLetterRecord.model_validate_json(raw) if raw else None
 
     async def get_by_task(self, task_id: str) -> DeadLetterRecord | None:
         try:
@@ -160,9 +166,7 @@ class DeadLetterQueue:
             return None
         updated = record.model_copy(
             update={
-                "approval_status": (
-                    ReplayApproval.APPROVED if approved else ReplayApproval.DENIED
-                )
+                "approval_status": (ReplayApproval.APPROVED if approved else ReplayApproval.DENIED)
             }
         )
         try:
@@ -191,11 +195,12 @@ class DeadLetterQueue:
                 Any,
                 self._redis.eval(
                     _REPLAY_SCRIPT,
-                    3 + len(ready),
+                    4 + len(ready),
                     f"{self._prefix}:dlq",
                     f"{self._prefix}:cancelled",
                     "unused",
                     *ready,
+                    f"{self._prefix}:metric-counters",
                     record.message_id,
                     new_message_id,
                     replayed_at.isoformat(),

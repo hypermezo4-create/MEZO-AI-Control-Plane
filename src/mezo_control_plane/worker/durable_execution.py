@@ -71,9 +71,7 @@ class SqlAlchemyExecutionGateway:
                 "execution-failure",
                 f"{failure.classification.value}:{failure.summary}",
             )
-            task.state = (
-                TaskState.QUEUED.value if failure.retryable else TaskState.FAILED.value
-            )
+            task.state = TaskState.QUEUED.value if failure.retryable else TaskState.FAILED.value
             task.updated_at = datetime.now(UTC)
 
     async def record_interrupted(self, delivery: ClaimedTask, reason: str) -> None:
@@ -114,9 +112,7 @@ class SqlAlchemyExecutionGateway:
 
     @staticmethod
     async def _task_for_update(session: AsyncSession, task_id: UUID) -> TaskRow:
-        task = await session.scalar(
-            select(TaskRow).where(TaskRow.id == task_id).with_for_update()
-        )
+        task = await session.scalar(select(TaskRow).where(TaskRow.id == task_id).with_for_update())
         if task is None:
             raise LookupError("Durable task does not exist")
         return task

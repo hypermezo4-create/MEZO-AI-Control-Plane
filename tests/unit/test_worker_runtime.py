@@ -4,6 +4,7 @@ from typing import cast
 
 from mezo_control_plane.core.domain import TaskRecord, TaskRequest
 from mezo_control_plane.queue.consumer import ClaimedTask, TaskConsumer
+from mezo_control_plane.queue.producer import QueueInfrastructureError
 from mezo_control_plane.worker.execution import DurableExecutionGateway
 from mezo_control_plane.worker.failure_classification import ExecutionFailure
 from mezo_control_plane.worker.registration import WorkerRegistry
@@ -30,12 +31,15 @@ class FakeConsumer:
         self.four_acknowledged = asyncio.Event()
         self.renewal_result = True
         self.renewals = 0
+        self.renewal_error = False
 
     async def claim(self, visibility_seconds: int) -> ClaimedTask | None:
         return self.deliveries.pop(0) if self.deliveries else None
 
     async def renew_lease(self, item: ClaimedTask, visibility_seconds: int) -> bool:
         self.renewals += 1
+        if self.renewal_error:
+            raise QueueInfrastructureError("redis unavailable")
         return self.renewal_result
 
     async def acknowledge(self, item: ClaimedTask) -> bool:
@@ -158,6 +162,41 @@ async def test_ownership_loss_stops_handler_without_acknowledging() -> None:
     await loop
     assert not consumer.acknowledged
     assert failures and failures[0].classification.value == "ownership_lost"
+
+
+async def test_renewal_infrastructure_failure_stops_execution() -> None:
+    consumer = FakeConsumer([delivery(1)])
+    consumer.renewal_error = True
+    registry = FakeRegistry()
+    persistence = FakePersistence()
+    stopped = asyncio.Event()
+
+    async def handler(item: ClaimedTask, cancelled: asyncio.Event) -> str:
+        try:
+            await asyncio.Event().wait()
+        finally:
+            stopped.set()
+
+    failures: list[ExecutionFailure] = []
+
+    async def dispatch(item: ClaimedTask, failure: ExecutionFailure) -> None:
+        failures.append(failure)
+
+    runtime = WorkerRuntime(
+        "worker",
+        cast(TaskConsumer, consumer),
+        cast(WorkerRegistry, registry),
+        cast(DurableExecutionGateway, persistence),
+        handler,
+        dispatch,
+        visibility_seconds=3,
+    )
+    loop = asyncio.create_task(runtime.run())
+    await asyncio.wait_for(stopped.wait(), timeout=2)
+    await runtime.shutdown(1)
+    await loop
+    assert not consumer.acknowledged
+    assert failures[0].classification.value == "ownership_lost"
 
 
 async def test_heartbeat_runs_without_claims_and_shutdown_marks_draining() -> None:

@@ -3,6 +3,7 @@ from datetime import UTC, datetime
 from uuid import UUID, uuid4
 
 from sqlalchemy import func, select
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from mezo_control_plane.core.domain import AuditEvent, EvidenceItem, TaskRecord, TaskState
@@ -21,22 +22,28 @@ class TaskRepository:
 
     async def create(self, task: TaskRecord, idempotency_key: str) -> TaskRecord:
         async with self._sessions.begin() as session:
-            existing = await session.scalar(
-                select(TaskRow).where(TaskRow.idempotency_key == idempotency_key)
+            inserted = await session.scalar(
+                pg_insert(TaskRow)
+                .values(
+                    id=task.id,
+                    idempotency_key=idempotency_key,
+                    repository=task.request.repository,
+                    instruction=task.request.instruction,
+                    state=task.state.value,
+                    risk=task.risk.value,
+                    created_at=task.created_at,
+                    updated_at=task.updated_at,
+                )
+                .on_conflict_do_nothing(index_elements=[TaskRow.idempotency_key])
+                .returning(TaskRow.id)
             )
-            if existing is not None:
+            if inserted is None:
+                existing = await session.scalar(
+                    select(TaskRow).where(TaskRow.idempotency_key == idempotency_key)
+                )
+                if existing is None:
+                    raise RuntimeError("Idempotent task insert could not be reconciled")
                 return self._to_record(existing)
-            row = TaskRow(
-                id=task.id,
-                idempotency_key=idempotency_key,
-                repository=task.request.repository,
-                instruction=task.request.instruction,
-                state=task.state.value,
-                risk=task.risk.value,
-                created_at=task.created_at,
-                updated_at=task.updated_at,
-            )
-            session.add(row)
         return task
 
     async def append_evidence(self, task_id: UUID, item: EvidenceItem) -> None:
@@ -73,9 +80,7 @@ class TaskRepository:
             row = await session.scalar(select(TaskRow).where(TaskRow.id == task_id))
             return self._to_record(row) if row else None
 
-    async def list_tasks(
-        self, offset: int = 0, limit: int = 50
-    ) -> tuple[list[TaskRecord], int]:
+    async def list_tasks(self, offset: int = 0, limit: int = 50) -> tuple[list[TaskRecord], int]:
         async with self._sessions() as session:
             rows = await session.scalars(
                 select(TaskRow)

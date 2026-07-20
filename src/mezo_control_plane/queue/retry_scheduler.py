@@ -36,6 +36,7 @@ for _,id in ipairs(ids) do
     else
       redis.call('HDEL', KEYS[2], id); redis.call('ZREM', KEYS[1], id)
       redis.call('RPUSH', KEYS[4 + tonumber(envelope.priority)], cjson.encode(envelope))
+      redis.call('HINCRBY', KEYS[8], 'retry_promotions', 1)
       promoted=promoted+1
     end
   end
@@ -160,6 +161,7 @@ class RetryScheduler:
             f"{self._prefix}:delayed",
             f"{self._prefix}:cancelled",
             *(f"{self._prefix}:ready:{int(priority)}" for priority in TaskPriority),
+            f"{self._prefix}:metric-counters",
         ]
         try:
             result = await cast(

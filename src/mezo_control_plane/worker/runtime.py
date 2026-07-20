@@ -159,7 +159,11 @@ class WorkerRuntime:
         interval = self._visibility_seconds / 3
         while not cancellation.is_set():
             await asyncio.sleep(interval)
-            if not await self._consumer.renew_lease(delivery, self._visibility_seconds):
+            try:
+                renewed = await self._consumer.renew_lease(delivery, self._visibility_seconds)
+            except QueueInfrastructureError:
+                renewed = False
+            if not renewed:
                 ownership_lost.set()
                 cancellation.set()
                 return
