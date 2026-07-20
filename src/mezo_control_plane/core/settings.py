@@ -18,12 +18,14 @@ class Settings(BaseSettings):
 
     gemini_api_key_primary: SecretStr = Field(default=SecretStr(""))
     gemini_api_key_secondary: SecretStr = Field(default=SecretStr(""))
-    gemini_primary_model: str = "gemini-3.5-flash"
-    gemini_review_model: str = "gemini-3.1-pro-preview"
+    gemini_project_primary: str = ""
+    gemini_project_secondary: str = ""
+    gemini_primary_model: str = "gemini-flash"
+    gemini_review_model: str = "gemini-pro"
 
     qwen_base_url: str = ""
     qwen_api_key: SecretStr = Field(default=SecretStr(""))
-    qwen_model: str = "qwen-coder-primary"
+    qwen_model: str = "qwen-coder"
 
     model_timeout_seconds: float = 120
     model_max_retries: int = 2

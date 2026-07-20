@@ -1,0 +1,26 @@
+version: 1
+routes:
+  planner:
+    - {provider: gemini-a, model: gemini-pro, input_cost_per_million: 1.25, output_cost_per_million: 5.0}
+    - {provider: qwen, model: qwen-coder, input_cost_per_million: 0.2, output_cost_per_million: 0.6}
+    - {provider: gemini-b, model: gemini-pro, input_cost_per_million: 1.25, output_cost_per_million: 5.0}
+  executor:
+    - {provider: qwen, model: qwen-coder, input_cost_per_million: 0.2, output_cost_per_million: 0.6}
+    - {provider: gemini-a, model: gemini-flash, input_cost_per_million: 0.1, output_cost_per_million: 0.4}
+    - {provider: gemini-b, model: gemini-flash, input_cost_per_million: 0.1, output_cost_per_million: 0.4}
+  blind_reviewer:
+    - {provider: gemini-b, model: gemini-pro, input_cost_per_million: 1.25, output_cost_per_million: 5.0}
+    - {provider: qwen, model: qwen-coder, input_cost_per_million: 0.2, output_cost_per_million: 0.6}
+  security_reviewer:
+    - {provider: gemini-b, model: gemini-pro, input_cost_per_million: 1.25, output_cost_per_million: 5.0}
+    - {provider: gemini-a, model: gemini-pro, input_cost_per_million: 1.25, output_cost_per_million: 5.0}
+    - {provider: qwen, model: qwen-coder, input_cost_per_million: 0.2, output_cost_per_million: 0.6}
+  final_verifier:
+    - {provider: gemini-a, model: gemini-pro, input_cost_per_million: 1.25, output_cost_per_million: 5.0}
+    - {provider: gemini-b, model: gemini-pro, input_cost_per_million: 1.25, output_cost_per_million: 5.0}
+  fast:
+    - {provider: gemini-a, model: gemini-flash, input_cost_per_million: 0.1, output_cost_per_million: 0.4}
+    - {provider: gemini-b, model: gemini-flash, input_cost_per_million: 0.1, output_cost_per_million: 0.4}
+  fallback:
+    - {provider: qwen, model: qwen-coder, input_cost_per_million: 0.2, output_cost_per_million: 0.6}
+    - {provider: gemini-b, model: gemini-flash, input_cost_per_million: 0.1, output_cost_per_million: 0.4}

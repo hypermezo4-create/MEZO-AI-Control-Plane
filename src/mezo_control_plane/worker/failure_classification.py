@@ -2,6 +2,8 @@ import asyncio
 from dataclasses import dataclass
 from enum import StrEnum
 
+from mezo_control_plane.providers.base import ProviderError, ProviderFailureType
+
 
 class FailureClass(StrEnum):
     RETRYABLE_PROVIDER = "retryable_provider"
@@ -23,6 +25,35 @@ class ExecutionFailure:
 
 
 def classify_failure(error: BaseException) -> ExecutionFailure:
+    if isinstance(error, ProviderError):
+        if error.failure_type is ProviderFailureType.CANCELLATION:
+            return ExecutionFailure(FailureClass.CANCELLED, "provider request cancelled", False)
+        if error.failure_type is ProviderFailureType.RATE_LIMIT:
+            return ExecutionFailure(
+                FailureClass.RATE_LIMITED,
+                "provider rate limited",
+                True,
+                error.retry_after_seconds,
+            )
+        permanent = error.failure_type in {
+            ProviderFailureType.AUTHENTICATION,
+            ProviderFailureType.PERMISSION,
+            ProviderFailureType.MALFORMED_OUTPUT,
+            ProviderFailureType.CONTENT_POLICY,
+            ProviderFailureType.UNKNOWN_MODEL,
+        }
+        return ExecutionFailure(
+            (
+                FailureClass.PERMANENT_AUTHORIZATION
+                if error.failure_type
+                in {ProviderFailureType.AUTHENTICATION, ProviderFailureType.PERMISSION}
+                else FailureClass.PERMANENT_VALIDATION
+                if permanent
+                else FailureClass.RETRYABLE_PROVIDER
+            ),
+            f"provider failure: {error.failure_type.value}",
+            not permanent,
+        )
     if isinstance(error, TimeoutError):
         return ExecutionFailure(FailureClass.TIMEOUT, "execution deadline exceeded", True)
     if isinstance(error, PermissionError):

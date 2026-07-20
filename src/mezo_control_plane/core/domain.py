@@ -172,3 +172,7 @@ class ModelResponse(BaseModel):
     model: str
     text: str
     request_id: str | None = None
+    input_tokens: int = Field(default=0, ge=0)
+    output_tokens: int = Field(default=0, ge=0)
+    tool_calls: list[dict[str, object]] = Field(default_factory=list)
+    structured_output: dict[str, object] | None = None
