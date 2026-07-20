@@ -21,7 +21,7 @@ def test_phase_07_12_migration_upgrade_and_downgrade() -> None:
     separator = "&" if "?" in synchronous_url else "?"
     isolated_url = f"{synchronous_url}{separator}options=-csearch_path%3D{schema}"
     configuration = Config("alembic.ini")
-    configuration.set_main_option("sqlalchemy.url", isolated_url)
+    configuration.set_main_option("sqlalchemy.url", isolated_url.replace("%", "%%"))
     try:
         command.upgrade(configuration, "head")
         engine = create_engine(isolated_url)
