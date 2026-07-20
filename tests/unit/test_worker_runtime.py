@@ -32,6 +32,7 @@ class FakeConsumer:
         self.renewal_result = True
         self.renewals = 0
         self.renewal_error = False
+        self.acknowledgement_result = True
 
     async def claim(self, visibility_seconds: int) -> ClaimedTask | None:
         return self.deliveries.pop(0) if self.deliveries else None
@@ -43,6 +44,8 @@ class FakeConsumer:
         return self.renewal_result
 
     async def acknowledge(self, item: ClaimedTask) -> bool:
+        if not self.acknowledgement_result:
+            return False
         self.acknowledged.append(item.message_id)
         if len(self.acknowledged) == 4:
             self.four_acknowledged.set()
@@ -226,3 +229,71 @@ async def test_heartbeat_runs_without_claims_and_shutdown_marks_draining() -> No
     await loop
     assert len(registry.heartbeats) >= 2
     assert registry.heartbeats[-1][1]
+
+
+async def test_durable_success_precedes_failed_redis_acknowledgement() -> None:
+    consumer = FakeConsumer([delivery(1)])
+    consumer.acknowledgement_result = False
+    registry = FakeRegistry()
+    persistence = FakePersistence()
+    interrupted = asyncio.Event()
+
+    async def handler(item: ClaimedTask, cancelled: asyncio.Event) -> str:
+        return "result"
+
+    async def dispatch(item: ClaimedTask, failure: ExecutionFailure) -> None:
+        raise AssertionError("successful handler must not dispatch failure")
+
+    original_interrupted = persistence.record_interrupted
+
+    async def record_interrupted(item: ClaimedTask, reason: str) -> None:
+        await original_interrupted(item, reason)
+        interrupted.set()
+
+    persistence.record_interrupted = record_interrupted  # type: ignore[method-assign]
+    runtime = WorkerRuntime(
+        "worker",
+        cast(TaskConsumer, consumer),
+        cast(WorkerRegistry, registry),
+        cast(DurableExecutionGateway, persistence),
+        handler,
+        dispatch,
+        visibility_seconds=3,
+    )
+    loop = asyncio.create_task(runtime.run())
+    await asyncio.wait_for(interrupted.wait(), timeout=1)
+    await runtime.shutdown(1)
+    await loop
+    assert persistence.events[:2] == ["claim:message-1", "success:message-1"]
+    assert not consumer.acknowledged
+
+
+async def test_drain_timeout_interrupts_without_acknowledging() -> None:
+    consumer = FakeConsumer([delivery(1)])
+    registry = FakeRegistry()
+    persistence = FakePersistence()
+    started = asyncio.Event()
+
+    async def handler(item: ClaimedTask, cancelled: asyncio.Event) -> str:
+        started.set()
+        await asyncio.Event().wait()
+        return "unreachable"
+
+    async def dispatch(item: ClaimedTask, failure: ExecutionFailure) -> None:
+        raise AssertionError("shutdown cancellation must remain recoverable")
+
+    runtime = WorkerRuntime(
+        "worker",
+        cast(TaskConsumer, consumer),
+        cast(WorkerRegistry, registry),
+        cast(DurableExecutionGateway, persistence),
+        handler,
+        dispatch,
+        visibility_seconds=3,
+    )
+    loop = asyncio.create_task(runtime.run())
+    await asyncio.wait_for(started.wait(), timeout=1)
+    await runtime.shutdown(0.001)
+    await loop
+    assert any(event.startswith("interrupted:") for event in persistence.events)
+    assert not consumer.acknowledged

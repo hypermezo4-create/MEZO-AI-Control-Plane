@@ -139,6 +139,46 @@ async def test_orphan_expiry_is_cleaned(redis_queue: tuple[Redis, str]) -> None:
     assert await redis.zcard(f"{prefix}:lease-expiry") == 0
 
 
+async def test_durable_terminal_and_cancelled_recovery_clean_without_requeue(
+    redis_queue: tuple[Redis, str],
+) -> None:
+    redis, prefix = redis_queue
+
+    async def completed(task_id: str) -> str:
+        return "completed"
+
+    durable_task = task()
+    await TaskProducer(redis, prefix).enqueue(durable_task, "durable-terminal")
+    claimed = await TaskConsumer(redis, "worker", prefix).claim(visibility_seconds=0)
+    assert claimed is not None
+    terminal = await LeaseRecovery(redis, prefix, durable_state=completed).recover_expired()
+    assert terminal.terminal_cleaned == 1
+    assert await redis.hlen(f"{prefix}:delayed") == 0
+
+    cancelled_task = task()
+    await TaskProducer(redis, prefix).enqueue(cancelled_task, "cancelled-recovery")
+    cancelled_claim = await TaskConsumer(redis, "worker", prefix).claim(visibility_seconds=0)
+    assert cancelled_claim is not None
+    await CancellationService(redis, prefix).cancel(str(cancelled_task.id))
+    cancelled = await LeaseRecovery(redis, prefix).recover_expired()
+    assert cancelled.cancelled_cleaned == 1
+    assert await redis.hlen(f"{prefix}:delayed") == 0
+
+
+async def test_recovery_batch_is_bounded(redis_queue: tuple[Redis, str]) -> None:
+    redis, prefix = redis_queue
+    producer = TaskProducer(redis, prefix)
+    consumer = TaskConsumer(redis, "worker", prefix)
+    for index in range(2):
+        await producer.enqueue(task(), f"bounded-{index}")
+        assert await consumer.claim(visibility_seconds=0) is not None
+    recovery = LeaseRecovery(redis, prefix)
+    first = await recovery.recover_expired(batch_size=1)
+    second = await recovery.recover_expired(batch_size=1)
+    assert first.candidates == second.candidates == 1
+    assert await redis.hlen(f"{prefix}:delayed") == 2
+
+
 async def test_retry_schedule_and_atomic_promotion(redis_queue: tuple[Redis, str]) -> None:
     redis, prefix = redis_queue
     result = await TaskProducer(redis, prefix).enqueue(task(), "retry")
