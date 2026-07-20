@@ -1,0 +1,20 @@
+version: 1
+roles:
+  planner:
+    - gemini_primary_pro
+    - qwen_coder
+    - gemini_secondary_pro
+  executor:
+    - qwen_coder
+    - gemini_primary_flash
+    - gemini_secondary_flash
+  reviewer:
+    - gemini_secondary_pro
+    - qwen_coder
+  fast:
+    - gemini_primary_flash
+    - gemini_secondary_flash
+limits:
+  max_rounds: 3
+  max_retries_per_route: 2
+  require_independent_reviewer: true

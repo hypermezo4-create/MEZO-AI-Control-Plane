@@ -1,0 +1,22 @@
+version: 1
+operations:
+  read_repository:
+    approval: false
+  create_branch:
+    approval: false
+  write_task_branch:
+    approval: false
+  open_pull_request:
+    approval: false
+  modify_workflows:
+    approval: true
+  database_migration:
+    approval: true
+  production_deploy:
+    approval: true
+  modify_secrets:
+    approval: true
+  delete_data:
+    approval: true
+  push_protected_branch:
+    allowed: false
