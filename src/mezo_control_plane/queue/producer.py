@@ -47,7 +47,7 @@ class TaskProducer:
         envelope = {
             "message_id": message_id,
             "task_id": str(task.id),
-            "task": task.model_dump(mode="json"),
+            "task_json": task.model_dump_json(),
             "attempt": 0,
             "priority": int(priority),
             "enqueued_at": task.created_at.isoformat(),

@@ -105,7 +105,7 @@ class TaskConsumer:
         if not raw:
             return None
         envelope = json.loads(raw)
-        task = TaskRecord.model_validate(envelope["task"])
+        task = TaskRecord.model_validate_json(envelope["task_json"])
         if task.state in {TaskState.COMPLETED, TaskState.FAILED, TaskState.CANCELLED}:
             return None
         return ClaimedTask(
@@ -117,6 +117,8 @@ class TaskConsumer:
         )
 
     async def acknowledge(self, claimed: ClaimedTask) -> bool:
+        if not claimed.owner_token.startswith(f"{self._worker_id}:"):
+            return False
         result = await cast(
             Any,
             self._redis.eval(
@@ -132,6 +134,8 @@ class TaskConsumer:
         return int(result) == 1
 
     async def renew_lease(self, claimed: ClaimedTask, visibility_seconds: int = 60) -> bool:
+        if not claimed.owner_token.startswith(f"{self._worker_id}:"):
+            return False
         expiry = datetime.now(UTC).timestamp() + visibility_seconds
         result = await cast(
             Any,
