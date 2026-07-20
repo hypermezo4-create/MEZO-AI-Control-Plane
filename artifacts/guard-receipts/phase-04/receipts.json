@@ -1,0 +1,54 @@
+[
+  {
+    "skill": "api-contract-guard",
+    "version": "1.0.0",
+    "skill_commit": "f4253e666fbe18f4b591520daf75c019a521dfa4",
+    "reviewed_commit_range": "35d8f1d59726b36c382aebc7ef1c902d14ac5eab..71650bb",
+    "reviewed_files": ["src/mezo_control_plane/api", "src/mezo_control_plane/application", "tests/contract/test_api_contract.py"],
+    "findings": [
+      {"severity": "important", "path": "src/mezo_control_plane/api/middleware.py", "finding": "Malformed Content-Length could raise outside the structured error contract.", "correction": "Validate nonnegative integer length and return a request-ID-bearing 400 envelope."},
+      {"severity": "important", "path": "src/mezo_control_plane/api/routes/tasks.py", "finding": "Route-local Redis construction bypassed a shared use-case boundary.", "correction": "Route all HTTP and Telegram task actions through TaskApplicationService."}
+    ],
+    "unresolved_exceptions": [],
+    "evidence_commands": ["pytest -q tests/contract", "pytest -q tests/security", "OpenAPI path assertion", "GitHub Actions 29758760523"],
+    "revisit_trigger": "Any endpoint, middleware order, schema, status, pagination, or webhook change.",
+    "final_ci_evidence": "GitHub Actions 29758760523 succeeded for reviewed head 74a86695f0f3a49db23365283e3362e797623012",
+    "result": "pass"
+  },
+  {
+    "skill": "security-guard",
+    "version": "1.0.0",
+    "skill_commit": "f4253e666fbe18f4b591520daf75c019a521dfa4",
+    "reviewed_commit_range": "35d8f1d59726b36c382aebc7ef1c902d14ac5eab..71650bb",
+    "reviewed_files": ["src/mezo_control_plane/api", "src/mezo_control_plane/core/settings.py", "tests/security/test_api_security.py"],
+    "findings": [{"severity": "critical", "path": "src/mezo_control_plane/core/settings.py", "finding": "A known default API key could authenticate requests before readiness was checked.", "correction": "Default the API key to empty, deny empty authentication, and fail configuration readiness for empty or placeholder values."}],
+    "unresolved_exceptions": [],
+    "evidence_commands": ["pytest -q tests/security", "pytest -q tests/contract", "ruff check ."],
+    "revisit_trigger": "Authentication, webhook, logging, body parsing, or error mapping changes.",
+    "result": "pass"
+  },
+  {
+    "skill": "clean-code-guard",
+    "version": "1.0.0",
+    "skill_commit": "f4253e666fbe18f4b591520daf75c019a521dfa4",
+    "reviewed_commit_range": "35d8f1d59726b36c382aebc7ef1c902d14ac5eab..71650bb",
+    "reviewed_files": ["src/mezo_control_plane/api", "src/mezo_control_plane/application"],
+    "findings": [{"severity": "important", "path": "src/mezo_control_plane/api/routes/tasks.py", "finding": "Infrastructure lifecycle in handlers coupled transport to Redis.", "correction": "Move lifecycle and business operations behind dependency-injected application services."}],
+    "unresolved_exceptions": [],
+    "evidence_commands": ["ruff check .", "mypy src"],
+    "revisit_trigger": "New HTTP handlers or application use cases.",
+    "result": "pass"
+  },
+  {
+    "skill": "test-guard",
+    "version": "1.0.0",
+    "skill_commit": "f4253e666fbe18f4b591520daf75c019a521dfa4",
+    "reviewed_commit_range": "35d8f1d59726b36c382aebc7ef1c902d14ac5eab..71650bb",
+    "reviewed_files": ["tests/contract/test_api_contract.py", "tests/security/test_api_security.py"],
+    "findings": [{"severity": "important", "path": "tests/contract", "finding": "No route-level contract suite existed for middleware failures or OpenAPI coverage.", "correction": "Add authenticated route, idempotency, validation, pagination, body, rate, webhook, health, and OpenAPI tests."}],
+    "unresolved_exceptions": [],
+    "evidence_commands": ["pytest -q tests/contract", "pytest -q tests/security"],
+    "revisit_trigger": "Any public API contract change.",
+    "result": "pass"
+  }
+]

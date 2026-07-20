@@ -1,0 +1,62 @@
+[
+  {
+    "skill": "telegram-guard",
+    "version": "1.0.0",
+    "skill_commit": "f4253e666fbe18f4b591520daf75c019a521dfa4",
+    "reviewed_commit_range": "35d8f1d59726b36c382aebc7ef1c902d14ac5eab..71650bb",
+    "reviewed_files": ["src/mezo_control_plane/telegram", "tests/unit/test_telegram.py", ".env.example"],
+    "findings": [{"severity": "important", "path": "src/mezo_control_plane/telegram/security.py", "finding": "One-time callback nonces were retained indefinitely.", "correction": "Store nonce expiry and purge expired replay entries during verification."}],
+    "unresolved_exceptions": [{"severity": "advisory", "detail": "Telegram health is an on-demand getMe probe; persistent polling/webhook hosting is a later deployment concern."}],
+    "evidence_commands": ["pytest -q tests/unit/test_telegram.py", "pytest -q tests/security", "ruff check ."],
+    "revisit_trigger": "Telegram transport hosting, callback payload, role, or command changes.",
+    "result": "pass"
+  },
+  {
+    "skill": "security-guard",
+    "version": "1.0.0",
+    "skill_commit": "f4253e666fbe18f4b591520daf75c019a521dfa4",
+    "reviewed_commit_range": "35d8f1d59726b36c382aebc7ef1c902d14ac5eab..71650bb",
+    "reviewed_files": ["src/mezo_control_plane/telegram/security.py", "src/mezo_control_plane/telegram/formatting.py", "src/mezo_control_plane/telegram/bot.py"],
+    "findings": [{"severity": "important", "path": "src/mezo_control_plane/telegram/bot.py", "finding": "Approval and deployment commands required explicit role boundaries and transport-only behavior.", "correction": "Enforce owner/operator/reviewer/viewer command sets and make deployment non-executing until its policy phase."}],
+    "unresolved_exceptions": [],
+    "evidence_commands": ["pytest -q tests/unit/test_telegram.py", "rg token|secret|private_key src/mezo_control_plane/telegram"],
+    "revisit_trigger": "New Telegram action, role, callback, or sensitive formatter.",
+    "result": "pass"
+  },
+  {
+    "skill": "concurrency-guard",
+    "version": "1.0.0",
+    "skill_commit": "f4253e666fbe18f4b591520daf75c019a521dfa4",
+    "reviewed_commit_range": "35d8f1d59726b36c382aebc7ef1c902d14ac5eab..71650bb",
+    "reviewed_files": ["src/mezo_control_plane/telegram/bot.py", "src/mezo_control_plane/telegram/transport.py"],
+    "findings": [{"severity": "important", "path": "src/mezo_control_plane/telegram/bot.py", "finding": "Updates, callbacks, users, and chats required separate replay/backpressure controls.", "correction": "Add bounded update deduplication, one-use callbacks, and independent sliding windows for users and chats."}],
+    "unresolved_exceptions": [],
+    "evidence_commands": ["pytest -q tests/unit/test_telegram.py"],
+    "revisit_trigger": "Concurrent update dispatch or multi-instance bot deployment.",
+    "result": "pass"
+  },
+  {
+    "skill": "clean-code-guard",
+    "version": "1.0.0",
+    "skill_commit": "f4253e666fbe18f4b591520daf75c019a521dfa4",
+    "reviewed_commit_range": "35d8f1d59726b36c382aebc7ef1c902d14ac5eab..71650bb",
+    "reviewed_files": ["src/mezo_control_plane/telegram", "src/mezo_control_plane/application"],
+    "findings": [{"severity": "important", "path": "src/mezo_control_plane/telegram/bot.py", "finding": "Telegram business orchestration would duplicate HTTP behavior.", "correction": "Keep the adapter transport-focused and reuse TaskApplicationService."}],
+    "unresolved_exceptions": [],
+    "evidence_commands": ["ruff check .", "mypy src"],
+    "revisit_trigger": "New Telegram business operation.",
+    "result": "pass"
+  },
+  {
+    "skill": "test-guard",
+    "version": "1.0.0",
+    "skill_commit": "f4253e666fbe18f4b591520daf75c019a521dfa4",
+    "reviewed_commit_range": "35d8f1d59726b36c382aebc7ef1c902d14ac5eab..71650bb",
+    "reviewed_files": ["tests/unit/test_telegram.py", "tests/integration/test_control_plane_flow.py"],
+    "findings": [{"severity": "important", "path": "tests/unit/test_telegram.py", "finding": "No behavioral tests existed for commands, roles, callback tamper/expiry/replay, FloodWait, chunking, redaction, or transport failure.", "correction": "Add command and failure-boundary tests plus shared-service integration."}],
+    "unresolved_exceptions": [],
+    "evidence_commands": ["pytest -q tests/unit/test_telegram.py", "pytest -q tests/integration"],
+    "revisit_trigger": "Telegram command or transport changes.",
+    "result": "pass"
+  }
+]

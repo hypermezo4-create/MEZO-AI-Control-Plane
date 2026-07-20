@@ -1,0 +1,81 @@
+[
+  {
+    "skill": "concurrency-guard",
+    "version": "1.0.0",
+    "skill_commit": "f4253e666fbe18f4b591520daf75c019a521dfa4",
+    "reviewed_commit_range": "35d8f1d59726b36c382aebc7ef1c902d14ac5eab..71650bb",
+    "reviewed_files": ["src/mezo_control_plane/queue", "src/mezo_control_plane/worker", "tests/integration/test_redis_queue.py", "tests/unit/test_worker_runtime.py"],
+    "findings": [
+      {"severity": "critical", "path": "src/mezo_control_plane/worker/runtime.py", "finding": "A Redis exception in the renewal coroutine terminated lease supervision without signalling ownership loss.", "correction": "Translate renewal infrastructure failure into ownership loss, cancel execution, and prohibit acknowledgement."},
+      {"severity": "important", "path": "src/mezo_control_plane/queue/consumer.py", "finding": "Wrong-owner operations were rejected but not observable.", "correction": "Increment distinct wrong-owner acknowledgement and renewal counters in the owner-checking Lua scripts."}
+    ],
+    "unresolved_exceptions": [],
+    "evidence_commands": ["ruff check .", "mypy src", "pytest -q tests/unit", "pytest -q tests/security", "pytest -q tests/integration", "pytest -q", "python -m compileall -q src tests", "GitHub Actions 29758760523"],
+    "revisit_trigger": "Any change to claim, lease, cancellation, retry, recovery, concurrency, or shutdown semantics.",
+    "final_ci_evidence": "GitHub Actions 29758760523 succeeded for reviewed head 74a86695f0f3a49db23365283e3362e797623012",
+    "result": "pass"
+  },
+  {
+    "skill": "database-guard",
+    "version": "1.0.0",
+    "skill_commit": "f4253e666fbe18f4b591520daf75c019a521dfa4",
+    "reviewed_commit_range": "35d8f1d59726b36c382aebc7ef1c902d14ac5eab..71650bb",
+    "reviewed_files": ["alembic/versions/0001_task_evidence_audit.py", "src/mezo_control_plane/database", "src/mezo_control_plane/worker/durable_execution.py", "docs/architecture/queue-consistency.md"],
+    "findings": [
+      {"severity": "important", "path": "src/mezo_control_plane/database/repositories.py", "finding": "Select-then-insert idempotency could race under concurrent submissions.", "correction": "Use PostgreSQL ON CONFLICT DO NOTHING with a transactional reconciliation read."},
+      {"severity": "advisory", "path": "docs/architecture/queue-consistency.md", "finding": "Evidence hash canonicalization and Redis/PostgreSQL failure ordering were not previously documented.", "correction": "Document canonical JSON hashing and commit-before-Redis ordering."}
+    ],
+    "unresolved_exceptions": [],
+    "evidence_commands": ["pytest -q tests/integration", "pytest -q", "GitHub Actions 29758760523 PostgreSQL service"],
+    "revisit_trigger": "Any schema, migration, task-state, evidence, or transaction-order change.",
+    "result": "pass"
+  },
+  {
+    "skill": "security-guard",
+    "version": "1.0.0",
+    "skill_commit": "f4253e666fbe18f4b591520daf75c019a521dfa4",
+    "reviewed_commit_range": "35d8f1d59726b36c382aebc7ef1c902d14ac5eab..71650bb",
+    "reviewed_files": ["src/mezo_control_plane/queue", "src/mezo_control_plane/worker", ".github/workflows/ci.yml"],
+    "findings": [{"severity": "important", "path": ".github/workflows/ci.yml", "finding": "Mutable service tags and action tags weakened supply-chain reproducibility.", "correction": "Pin Redis and PostgreSQL digests and third-party actions to immutable SHAs."}],
+    "unresolved_exceptions": [],
+    "evidence_commands": ["rg TODO|FIXME|shell=True|redis.call('KEYS' src tests", "pytest -q tests/security", "GitHub Actions 29758760523"],
+    "revisit_trigger": "Dependency, workflow, credential, Lua, or ownership-policy changes.",
+    "result": "pass"
+  },
+  {
+    "skill": "clean-code-guard",
+    "version": "1.0.0",
+    "skill_commit": "f4253e666fbe18f4b591520daf75c019a521dfa4",
+    "reviewed_commit_range": "35d8f1d59726b36c382aebc7ef1c902d14ac5eab..71650bb",
+    "reviewed_files": ["src/mezo_control_plane/queue", "src/mezo_control_plane/worker"],
+    "findings": [{"severity": "important", "path": "src/mezo_control_plane/worker", "finding": "Worker re-export modules duplicated ownership without runtime responsibility.", "correction": "Remove re-export modules and keep canonical execution, registration, runtime, and failure boundaries."}],
+    "unresolved_exceptions": [],
+    "evidence_commands": ["ruff check .", "mypy src"],
+    "revisit_trigger": "New queue or worker module boundaries.",
+    "result": "pass"
+  },
+  {
+    "skill": "test-guard",
+    "version": "1.0.0",
+    "skill_commit": "f4253e666fbe18f4b591520daf75c019a521dfa4",
+    "reviewed_commit_range": "35d8f1d59726b36c382aebc7ef1c902d14ac5eab..71650bb",
+    "reviewed_files": ["tests/unit", "tests/security", "tests/integration"],
+    "findings": [{"severity": "critical", "path": "tests/integration/test_redis_queue.py", "finding": "The initial Redis suite did not cover concurrent recovery, typed retry, replay, cancellation, registration, or non-destructive metrics.", "correction": "Expand real Redis scenarios and add PostgreSQL/Redis end-to-end execution."}],
+    "unresolved_exceptions": [],
+    "evidence_commands": ["pytest -q tests/unit", "pytest -q tests/security", "pytest -q tests/integration", "pytest -q"],
+    "revisit_trigger": "Any change in delivery failure windows or worker lifecycle.",
+    "result": "pass"
+  },
+  {
+    "skill": "docs-guard",
+    "version": "1.0.0",
+    "skill_commit": "f4253e666fbe18f4b591520daf75c019a521dfa4",
+    "reviewed_commit_range": "35d8f1d59726b36c382aebc7ef1c902d14ac5eab..71650bb",
+    "reviewed_files": ["docs/architecture/queue-consistency.md", "docs/architecture/phases-03-06.md", ".env.example"],
+    "findings": [{"severity": "important", "path": "docs/architecture", "finding": "Queue consistency, failure ordering, and implemented Phase 3 behavior lacked a source-backed operations document.", "correction": "Add consistency and capability documents with explicit limitations and failure behavior."}],
+    "unresolved_exceptions": [],
+    "evidence_commands": ["python -m compileall -q src tests", "rg referenced symbols and environment keys docs src .env.example"],
+    "revisit_trigger": "Endpoint, configuration, queue ordering, or operational behavior changes.",
+    "result": "pass"
+  }
+]
