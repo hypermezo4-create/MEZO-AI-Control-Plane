@@ -50,6 +50,7 @@ jobs:
       - run: pytest -q tests/security
       - run: pytest -q tests/integration
       - run: pytest -q tests/contract
+      - run: pytest -q tests/end_to_end
       - run: pytest -q
       - run: python -m compileall -q src tests
 
@@ -62,4 +63,11 @@ jobs:
         with:
           context: .
           push: false
+          load: true
           tags: mezo-ai-control-plane:${{ github.sha }}
+      - name: Run Docker sandbox security contract
+        run: >-
+          docker run --rm --network=none --read-only --user=10001:10001
+          --cap-drop=ALL --security-opt=no-new-privileges --pids-limit=64
+          mezo-ai-control-plane:${{ github.sha }}
+          python -c "import os; assert os.getuid() == 10001"
