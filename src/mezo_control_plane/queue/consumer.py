@@ -34,6 +34,7 @@ for i=1,ARGV[1] do
       redis.call('HSET', KEYS[5], envelope.message_id, encoded)
       redis.call('HSET', KEYS[6], envelope.message_id, lease)
       redis.call('ZADD', KEYS[7], ARGV[6], envelope.message_id)
+      redis.call('HINCRBY', KEYS[9], 'claims', 1)
       return encoded
     end
   end
@@ -45,9 +46,11 @@ local lease=redis.call('HGET', KEYS[2], ARGV[1])
 if not lease then return 0 end
 local metadata=cjson.decode(lease)
 if metadata.owner_token ~= ARGV[2] then return -1 end
+if redis.call('SISMEMBER', KEYS[4], metadata.task_id) == 1 then return -2 end
 redis.call('HDEL', KEYS[1], ARGV[1])
 redis.call('HDEL', KEYS[2], ARGV[1])
 redis.call('ZREM', KEYS[3], ARGV[1])
+redis.call('HINCRBY', KEYS[5], 'acknowledgements', 1)
 return 1
 """
 _RENEW_SCRIPT = """
@@ -59,6 +62,7 @@ metadata.lease_expires_at=ARGV[4]
 metadata.lease_deadline=ARGV[5]
 redis.call('HSET', KEYS[2], ARGV[1], cjson.encode(metadata))
 redis.call('ZADD', KEYS[3], ARGV[5], ARGV[1])
+redis.call('HINCRBY', KEYS[5], 'renewals', 1)
 return 1
 """
 
@@ -89,6 +93,7 @@ class TaskConsumer:
             f"{self._prefix}:leases",
             f"{self._prefix}:lease-expiry",
             f"{self._prefix}:cancelled",
+            f"{self._prefix}:metric-counters",
         ]
         try:
             raw = await cast(
@@ -127,10 +132,12 @@ class TaskConsumer:
                 Any,
                 self._redis.eval(
                     _ACK_SCRIPT,
-                    3,
+                    5,
                     f"{self._prefix}:inflight",
                     f"{self._prefix}:leases",
                     f"{self._prefix}:lease-expiry",
+                    f"{self._prefix}:cancelled",
+                    f"{self._prefix}:metric-counters",
                     claimed.message_id,
                     claimed.owner_token,
                 ),
@@ -148,11 +155,12 @@ class TaskConsumer:
                 Any,
                 self._redis.eval(
                     _RENEW_SCRIPT,
-                    4,
+                    5,
                     f"{self._prefix}:inflight",
                     f"{self._prefix}:leases",
                     f"{self._prefix}:lease-expiry",
                     f"{self._prefix}:cancelled",
+                    f"{self._prefix}:metric-counters",
                     claimed.message_id,
                     claimed.owner_token,
                     str(claimed.task.id),

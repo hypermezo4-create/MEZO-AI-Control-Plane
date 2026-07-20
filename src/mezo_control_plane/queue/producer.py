@@ -11,10 +11,11 @@ from mezo_control_plane.queue.priorities import TaskPriority
 
 _ENQUEUE_SCRIPT = """
 local existing=redis.call('GET', KEYS[2])
-if existing then return {0, existing} end
+if existing then redis.call('HINCRBY', KEYS[4], 'duplicate_enqueue', 1); return {0, existing} end
 redis.call('SET', KEYS[2], ARGV[1], 'NX', 'EX', ARGV[2])
 redis.call('HSET', KEYS[3], ARGV[3], ARGV[1])
 redis.call('RPUSH', KEYS[1], ARGV[4])
+redis.call('HINCRBY', KEYS[4], 'enqueued', 1)
 return {1, ARGV[1]}
 """
 
@@ -57,10 +58,11 @@ class TaskProducer:
                 Any,
                 self._redis.eval(
                     _ENQUEUE_SCRIPT,
-                    3,
+                    4,
                     f"{self._prefix}:ready:{int(priority)}",
                     f"{self._prefix}:dedupe:{dedupe}",
                     f"{self._prefix}:task-index",
+                    f"{self._prefix}:metric-counters",
                     message_id,
                     "86400",
                     str(task.id),
