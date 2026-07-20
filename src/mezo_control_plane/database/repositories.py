@@ -15,6 +15,10 @@ class TaskRepository:
     def __init__(self, sessions: async_sessionmaker[AsyncSession]) -> None:
         self._sessions = sessions
 
+    @property
+    def session_factory(self) -> async_sessionmaker[AsyncSession]:
+        return self._sessions
+
     async def create(self, task: TaskRecord, idempotency_key: str) -> TaskRecord:
         async with self._sessions.begin() as session:
             existing = await session.scalar(
