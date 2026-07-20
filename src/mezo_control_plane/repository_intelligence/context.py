@@ -10,9 +10,7 @@ class RepositoryContext:
     relevant_files: dict[str, str]
 
     def render(self) -> str:
-        files = "\n".join(
-            f"## {path}\n{content}" for path, content in self.relevant_files.items()
-        )
+        files = "\n".join(f"## {path}\n{content}" for path, content in self.relevant_files.items())
         return (
             f"Repository: {self.repository}\n"
             f"Base branch: {self.base_branch}\n"

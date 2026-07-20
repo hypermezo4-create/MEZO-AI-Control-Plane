@@ -120,6 +120,39 @@ async def test_base_movement_protected_paths_and_own_approval() -> None:
         await client.approve_pull_request()
 
 
+@pytest.mark.asyncio
+async def test_multi_file_commit_uses_blob_tree_commit_and_compare_and_set_ref() -> None:
+    transport = FakeTransport(
+        [
+            (200, {"object": {"sha": "a" * 40}}, {}),
+            (200, {"tree": {"sha": "b" * 40}}, {}),
+            (201, {"sha": "c" * 40}, {}),
+            (201, {"sha": "d" * 40}, {}),
+            (201, {"sha": "e" * 40}, {}),
+            (201, {"sha": "f" * 40}, {}),
+            (200, {}, {}),
+        ]
+    )
+    client = GitHubClient(transport, allowed_repositories=frozenset({"owner/repo"}))
+    commit = await client.create_commit(
+        "owner/repo",
+        "agent/task-fix",
+        "a" * 40,
+        {"a.py": "a", "b.py": "b"},
+        "x",
+    )
+    assert commit == "f" * 40
+    assert [request[1].split("/")[-1] for request in transport.requests] == [
+        "task-fix",
+        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "blobs",
+        "blobs",
+        "trees",
+        "commits",
+        "task-fix",
+    ]
+
+
 def test_permission_scope_denies_repository_branch_and_permission() -> None:
     client = GitHubClient(FakeTransport([]), allowed_repositories=frozenset({"owner/repo"}))
     assert not client.authorize(

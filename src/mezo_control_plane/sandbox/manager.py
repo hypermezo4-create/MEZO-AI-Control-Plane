@@ -101,11 +101,7 @@ class CommandRunner:
             stdin=asyncio.subprocess.PIPE if command.stdin is not None else None,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
-            creationflags=(
-                getattr(__import__("subprocess"), "CREATE_NEW_PROCESS_GROUP", 0)
-                if os.name == "nt"
-                else 0
-            ),
+            creationflags=0x00000200 if os.name == "nt" else 0,
             start_new_session=os.name != "nt",
         )
         communicate = asyncio.create_task(process.communicate(command.stdin))

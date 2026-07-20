@@ -106,6 +106,7 @@ class GitHubClient:
         expected_base: str,
         files: dict[str, str],
         token: str,
+        expected_blob_shas: dict[str, str] | None = None,
     ) -> str:
         if branch in self._protected:
             raise GitHubError(
@@ -127,20 +128,68 @@ class GitHubClient:
         _raise_for_status(status, headers)
         if ref.get("object", {}).get("sha") != expected_base:
             raise GitHubError(GitHubFailureType.CONFLICT, "Base branch moved", retryable=False)
+        for path, expected_sha in (expected_blob_shas or {}).items():
+            _validate_path(path)
+            status, current, headers = await self._transport.request(
+                "GET",
+                f"/repos/{repository}/contents/{path}?ref={expected_base}",
+                token=token,
+            )
+            _raise_for_status(status, headers)
+            if current.get("sha") != expected_sha:
+                raise GitHubError(
+                    GitHubFailureType.CONFLICT,
+                    f"Blob changed before commit: {path}",
+                    retryable=False,
+                )
+        status, base_commit, headers = await self._transport.request(
+            "GET", f"/repos/{repository}/git/commits/{expected_base}", token=token
+        )
+        _raise_for_status(status, headers)
+        base_tree = str(base_commit.get("tree", {}).get("sha", ""))
+        if not base_tree:
+            raise GitHubError(
+                GitHubFailureType.SERVER, "GitHub base tree response is invalid", retryable=True
+            )
+        tree_entries: list[dict[str, object]] = []
+        for path, content in sorted(files.items()):
+            status, blob, headers = await self._transport.request(
+                "POST",
+                f"/repos/{repository}/git/blobs",
+                token=token,
+                json_body={"content": content, "encoding": "utf-8"},
+            )
+            _raise_for_status(status, headers)
+            tree_entries.append(
+                {"path": path, "mode": "100644", "type": "blob", "sha": str(blob["sha"])}
+            )
+        status, tree, headers = await self._transport.request(
+            "POST",
+            f"/repos/{repository}/git/trees",
+            token=token,
+            json_body={"base_tree": base_tree, "tree": tree_entries},
+        )
+        _raise_for_status(status, headers)
         status, result, headers = await self._transport.request(
             "POST",
             f"/repos/{repository}/git/commits",
             token=token,
             json_body={
                 "message": "MEZO controlled change",
-                "tree": [
-                    {"path": path, "content": content} for path, content in sorted(files.items())
-                ],
+                "tree": str(tree["sha"]),
                 "parents": [expected_base],
             },
         )
         _raise_for_status(status, headers)
-        return str(result["sha"])
+        commit_sha = str(result["sha"])
+        status, _, headers = await self._transport.request(
+            "PATCH",
+            f"/repos/{repository}/git/refs/heads/{branch}",
+            token=token,
+            json_body={"sha": commit_sha, "force": False},
+        )
+        _raise_for_status(status, headers)
+        return commit_sha
 
     async def create_draft_pull_request(
         self,

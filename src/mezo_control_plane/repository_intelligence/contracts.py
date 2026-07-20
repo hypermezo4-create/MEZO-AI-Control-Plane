@@ -59,4 +59,3 @@ class RepositoryMap:
     generated: tuple[str, ...]
     vendor: tuple[str, ...]
     sensitive: tuple[str, ...]
-

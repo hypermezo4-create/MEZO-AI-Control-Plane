@@ -30,6 +30,11 @@ class RepositoryAcquirer:
     ) -> Path:
         if repository not in self._policy.allowed_repositories:
             raise RepositoryAcquisitionError("Repository is not allowlisted")
+        if remote_url not in {
+            f"https://github.com/{repository}",
+            f"https://github.com/{repository}.git",
+        }:
+            raise RepositoryAcquisitionError("Remote URL does not match the approved repository")
         if not re.fullmatch(r"[0-9a-f]{40}", base_sha):
             raise RepositoryAcquisitionError("Base commit must be an immutable SHA")
         await asyncio.to_thread(_prepare_destination, destination)
@@ -41,12 +46,30 @@ class RepositoryAcquirer:
         }
         commands = (
             ("git", "init", str(destination)),
-            ("git", "-C", str(destination), "remote", "add", "origin", remote_url),
             (
-                "git", "-C", str(destination), "-c", "protocol.file.allow=never", "fetch",
-                "--depth=1", "--no-tags", "origin", base_sha,
+                "git",
+                "-C",
+                str(destination),
+                "-c",
+                "protocol.file.allow=never",
+                "-c",
+                "core.hooksPath=",
+                "fetch",
+                "--depth=1",
+                "--no-tags",
+                remote_url,
+                base_sha,
             ),
-            ("git", "-C", str(destination), "checkout", "--detach", base_sha),
+            (
+                "git",
+                "-C",
+                str(destination),
+                "-c",
+                "core.hooksPath=",
+                "checkout",
+                "--detach",
+                base_sha,
+            ),
         )
         try:
             for command in commands:

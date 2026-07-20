@@ -57,13 +57,10 @@ class RepositoryScanner:
             deployment_files=tuple(
                 path
                 for path in files
-                if PurePosixPath(path).name
-                in {"Dockerfile", "fly.toml", "docker-compose.yml"}
+                if PurePosixPath(path).name in {"Dockerfile", "fly.toml", "docker-compose.yml"}
             ),
             generated=tuple(
-                path
-                for path in files
-                if ".generated." in path or path.endswith(".min.js")
+                path for path in files if ".generated." in path or path.endswith(".min.js")
             ),
             vendor=tuple(path for path in files if "vendor" in PurePosixPath(path).parts),
             sensitive=tuple(path for path in files if is_sensitive(path)),
@@ -161,7 +158,15 @@ def _is_test(path: str) -> bool:
 def _language(path: str) -> str:
     suffix = PurePosixPath(path).suffix.lower()
     return {
-        ".py": "python", ".sh": "shell", ".yaml": "yaml", ".yml": "yaml",
-        ".json": "json", ".java": "java", ".kt": "kotlin", ".c": "c",
-        ".h": "c", ".cc": "cpp", ".cpp": "cpp",
+        ".py": "python",
+        ".sh": "shell",
+        ".yaml": "yaml",
+        ".yml": "yaml",
+        ".json": "json",
+        ".java": "java",
+        ".kt": "kotlin",
+        ".c": "c",
+        ".h": "c",
+        ".cc": "cpp",
+        ".cpp": "cpp",
     }.get(suffix, "unknown")

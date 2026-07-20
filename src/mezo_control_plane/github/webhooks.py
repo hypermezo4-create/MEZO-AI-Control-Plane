@@ -15,6 +15,7 @@ ALLOWED_EVENTS = frozenset(
         "pull_request_review",
         "check_run",
         "check_suite",
+        "issue",
         "issues",
         "issue_comment",
         "installation",
