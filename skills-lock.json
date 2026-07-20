@@ -1,0 +1,71 @@
+{
+  "version": 1,
+  "skills": {
+    "agent-system-guard": {
+      "source": "hypermezo4-create/MEZO-Agent-Skills",
+      "sourceType": "github",
+      "skillPath": "skills/agent-system-guard/SKILL.md",
+      "computedHash": "3b551881e8743540a7594ac3c0e63d038b652ab5c7e9fa9e03a120bf9672d475"
+    },
+    "api-contract-guard": {
+      "source": "hypermezo4-create/MEZO-Agent-Skills",
+      "sourceType": "github",
+      "skillPath": "skills/api-contract-guard/SKILL.md",
+      "computedHash": "121a3a8ebf3b704dbc1fbde746b18a081503078f29e19d89a4cd183ccf35b6a4"
+    },
+    "architecture-guard": {
+      "source": "hypermezo4-create/MEZO-Agent-Skills",
+      "sourceType": "github",
+      "skillPath": "skills/architecture-guard/SKILL.md",
+      "computedHash": "e421e612c7d6d8da19f3d78e76af4f7fae76bed9de1102f8cc5baf1eebbe543e"
+    },
+    "clean-code-guard": {
+      "source": "hypermezo4-create/MEZO-Agent-Skills",
+      "sourceType": "github",
+      "skillPath": "skills/clean-code-guard/SKILL.md",
+      "computedHash": "8bfb5f03c12c7889087fc38fa4830642d46b3f4985c0eb68d1690e947c9d8da4"
+    },
+    "concurrency-guard": {
+      "source": "hypermezo4-create/MEZO-Agent-Skills",
+      "sourceType": "github",
+      "skillPath": "skills/concurrency-guard/SKILL.md",
+      "computedHash": "ebea5db2bc6bf5e1f3d815fecc3111f582b07ffbc92690063cfa8f381839bda0"
+    },
+    "database-guard": {
+      "source": "hypermezo4-create/MEZO-Agent-Skills",
+      "sourceType": "github",
+      "skillPath": "skills/database-guard/SKILL.md",
+      "computedHash": "ea553f4f19eb015d8089a861cf09051714642b38043052ce2f9736135d8716c9"
+    },
+    "deployment-guard": {
+      "source": "hypermezo4-create/MEZO-Agent-Skills",
+      "sourceType": "github",
+      "skillPath": "skills/deployment-guard/SKILL.md",
+      "computedHash": "5626724294fdfde1107a3239d504079d72fbe84d71fb55e10c6e614915307144"
+    },
+    "docs-guard": {
+      "source": "hypermezo4-create/MEZO-Agent-Skills",
+      "sourceType": "github",
+      "skillPath": "skills/docs-guard/SKILL.md",
+      "computedHash": "c936ce20cefaabee1006201307613556071527d20f8b5a2f721f3af3e34cf701"
+    },
+    "security-guard": {
+      "source": "hypermezo4-create/MEZO-Agent-Skills",
+      "sourceType": "github",
+      "skillPath": "skills/security-guard/SKILL.md",
+      "computedHash": "7ee40db9b9ffdf072c1a6051af78c97e54594dd67bdf6bb578a7bde566918830"
+    },
+    "telegram-guard": {
+      "source": "hypermezo4-create/MEZO-Agent-Skills",
+      "sourceType": "github",
+      "skillPath": "skills/telegram-guard/SKILL.md",
+      "computedHash": "bc94b67ffb8fd457f5560979e72d845f682bf132baa8ea8c75bed3db18076409"
+    },
+    "test-guard": {
+      "source": "hypermezo4-create/MEZO-Agent-Skills",
+      "sourceType": "github",
+      "skillPath": "skills/test-guard/SKILL.md",
+      "computedHash": "f332489e3e88e5cda1ea975e520ed5fe22ab781b71dd8b6a7884f521c6d98950"
+    }
+  }
+}

@@ -1,0 +1,75 @@
+[
+  {
+    "skill": "agent-system-guard",
+    "version": "1.0.0",
+    "skill_commit": "f4253e666fbe18f4b591520daf75c019a521dfa4",
+    "reviewed_commit_range": "35d8f1d59726b36c382aebc7ef1c902d14ac5eab..7223527",
+    "reviewed_files": ["src/mezo_control_plane/providers", "src/mezo_control_plane/model_router", "tests/unit/test_providers_and_router.py"],
+    "findings": [{"severity": "critical", "path": "src/mezo_control_plane/model_router/router.py", "finding": "Runtime route chains and blind-review context boundaries were previously incomplete.", "correction": "Load versioned validated routes, record attempts and budgets, and expose a closed BlindReviewContext without executor persuasion fields."}],
+    "unresolved_exceptions": [],
+    "evidence_commands": ["pytest -q tests/unit/test_providers_and_router.py", "pytest -q tests/integration", "GitHub Actions 29758760523"],
+    "revisit_trigger": "Provider, route, role, prompt-context, budget, or review-isolation changes.",
+    "final_ci_evidence": "GitHub Actions 29758760523 succeeded for reviewed head 74a86695f0f3a49db23365283e3362e797623012",
+    "result": "pass"
+  },
+  {
+    "skill": "architecture-guard",
+    "version": "1.0.0",
+    "skill_commit": "f4253e666fbe18f4b591520daf75c019a521dfa4",
+    "reviewed_commit_range": "35d8f1d59726b36c382aebc7ef1c902d14ac5eab..7223527",
+    "reviewed_files": ["src/mezo_control_plane/application", "src/mezo_control_plane/api", "src/mezo_control_plane/telegram", "src/mezo_control_plane/providers", "src/mezo_control_plane/model_router"],
+    "findings": [{"severity": "important", "path": "src/mezo_control_plane/application", "finding": "API, Telegram, and workers needed one directional application boundary.", "correction": "Introduce typed application, persistence, provider, queue, transport, and execution ports with canonical owners."}],
+    "unresolved_exceptions": [],
+    "evidence_commands": ["mypy src", "python -m compileall -q src tests"],
+    "revisit_trigger": "New adapter or cross-package dependency.",
+    "result": "pass"
+  },
+  {
+    "skill": "security-guard",
+    "version": "1.0.0",
+    "skill_commit": "f4253e666fbe18f4b591520daf75c019a521dfa4",
+    "reviewed_commit_range": "35d8f1d59726b36c382aebc7ef1c902d14ac5eab..7223527",
+    "reviewed_files": ["src/mezo_control_plane/providers", "src/mezo_control_plane/model_router", ".env.example"],
+    "findings": [{"severity": "important", "path": "src/mezo_control_plane/providers", "finding": "Provider errors risked returning response bodies that can contain sensitive material.", "correction": "Use typed redacted summaries and never include provider response bodies, keys, or endpoints in raised messages."}],
+    "unresolved_exceptions": [],
+    "evidence_commands": ["pytest -q tests/security", "pytest -q tests/unit/test_providers_and_router.py", "rg credentials src/mezo_control_plane/providers"],
+    "revisit_trigger": "Provider logging, error, authentication, or endpoint changes.",
+    "result": "pass"
+  },
+  {
+    "skill": "concurrency-guard",
+    "version": "1.0.0",
+    "skill_commit": "f4253e666fbe18f4b591520daf75c019a521dfa4",
+    "reviewed_commit_range": "35d8f1d59726b36c382aebc7ef1c902d14ac5eab..7223527",
+    "reviewed_files": ["src/mezo_control_plane/providers/gemini.py", "src/mezo_control_plane/providers/qwen.py", "src/mezo_control_plane/providers/resilience.py"],
+    "findings": [{"severity": "important", "path": "src/mezo_control_plane/providers", "finding": "Gemini projects and Qwen required independent concurrency and failure state.", "correction": "Give each configured instance its own semaphore, circuit breaker, retry budget, health, and cancellation/deadline boundary."}],
+    "unresolved_exceptions": [],
+    "evidence_commands": ["pytest -q tests/unit/test_providers_and_router.py"],
+    "revisit_trigger": "Provider concurrency, retry, circuit, or deadline changes.",
+    "result": "pass"
+  },
+  {
+    "skill": "clean-code-guard",
+    "version": "1.0.0",
+    "skill_commit": "f4253e666fbe18f4b591520daf75c019a521dfa4",
+    "reviewed_commit_range": "35d8f1d59726b36c382aebc7ef1c902d14ac5eab..7223527",
+    "reviewed_files": ["src/mezo_control_plane/providers", "src/mezo_control_plane/model_router"],
+    "findings": [{"severity": "important", "path": "src/mezo_control_plane/model_router", "finding": "Hardcoded runtime routing mixed configuration with selection logic.", "correction": "Move chains and costs to routes.v1.yaml and keep validation/selection in typed code."}],
+    "unresolved_exceptions": [],
+    "evidence_commands": ["ruff check .", "mypy src"],
+    "revisit_trigger": "New provider or route configuration version.",
+    "result": "pass"
+  },
+  {
+    "skill": "test-guard",
+    "version": "1.0.0",
+    "skill_commit": "f4253e666fbe18f4b591520daf75c019a521dfa4",
+    "reviewed_commit_range": "35d8f1d59726b36c382aebc7ef1c902d14ac5eab..7223527",
+    "reviewed_files": ["tests/unit/test_providers_and_router.py", "tests/integration/test_control_plane_flow.py"],
+    "findings": [{"severity": "critical", "path": "tests/unit/test_providers_and_router.py", "finding": "Provider classification, fallback, circuit, tool call, embedding, structured output, budget, cost, and isolation paths lacked deterministic evidence.", "correction": "Add mock-transport tests for each failure class and a real cross-phase Redis/PostgreSQL execution test."}],
+    "unresolved_exceptions": [],
+    "evidence_commands": ["pytest -q tests/unit", "pytest -q tests/integration", "pytest -q", "GitHub Actions 29758760523"],
+    "revisit_trigger": "Provider response, routing, cost, or blind-review context changes.",
+    "result": "pass"
+  }
+]

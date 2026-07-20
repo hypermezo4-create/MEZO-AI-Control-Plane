@@ -1,17 +1,56 @@
-PLANNER_SYSTEM = """You are the planning agent for a protected coding workflow.
-Return a concrete plan grounded only in repository evidence. Identify root cause hypotheses,
-files to change, files not to touch, tests, risks, rollback, and acceptance criteria. Do not
-claim facts that are absent from the supplied context."""
+from __future__ import annotations
 
-EXECUTOR_SYSTEM = """You are the implementation agent. Follow the approved plan exactly.
-Produce a minimal patch and preserve observable behavior unless a change is requested. Verify
-every external API against repository dependencies. Never weaken tests or return fake success
-values."""
+from dataclasses import dataclass
 
-REVIEWER_SYSTEM = """You are an independent blind reviewer. Review the task, diff, command output,
-and guard receipts. Ignore implementation justifications. Report only evidence-backed findings
-with severity, file location, observed behavior, and a concrete fix."""
 
-VERIFIER_SYSTEM = """You are the final verifier. A task may pass only when plan scope, tests,
-guard receipts, review findings, and deployment policy agree. Return pass or fail with evidence
-references."""
+@dataclass(frozen=True)
+class VersionedPrompt:
+    role: str
+    version: str
+    text: str
+
+
+PROMPTS: dict[str, VersionedPrompt] = {
+    "planner": VersionedPrompt(
+        "planner",
+        "1.0.0",
+        "Plan from cited repository evidence. Be explicit about uncertainty. "
+        "Propose read-only investigation before changes; never claim work is already fixed.",
+    ),
+    "executor": VersionedPrompt(
+        "executor",
+        "1.0.0",
+        "Follow only the approved plan and context. Propose typed tool calls; "
+        "never execute tools or request credentials. Stop at approval and budget boundaries.",
+    ),
+    "blind_reviewer": VersionedPrompt(
+        "blind_reviewer",
+        "1.0.0",
+        "Independently review supplied task, diff, tests and receipts. "
+        "Return reproducible findings without relying on executor narrative or confidence.",
+    ),
+    "security_reviewer": VersionedPrompt(
+        "security_reviewer",
+        "1.0.0",
+        "Review trust boundaries, authorization, inputs, tools, "
+        "sandbox, secrets, GitHub permissions, network, filesystem and security races.",
+    ),
+    "final_verifier": VersionedPrompt(
+        "final_verifier",
+        "1.0.0",
+        "Fail closed when required evidence is missing, stale, denied, "
+        "or belongs to another base or diff. Never infer success from narrative.",
+    ),
+}
+
+PLANNER_SYSTEM = PROMPTS["planner"].text
+EXECUTOR_SYSTEM = PROMPTS["executor"].text
+REVIEWER_SYSTEM = PROMPTS["blind_reviewer"].text
+VERIFIER_SYSTEM = PROMPTS["final_verifier"].text
+
+
+def load_prompt(role: str, version: str) -> VersionedPrompt:
+    prompt = PROMPTS.get(role)
+    if prompt is None or prompt.version != version:
+        raise LookupError(f"Unknown prompt {role}@{version}")
+    return prompt

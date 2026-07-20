@@ -5,8 +5,16 @@ from mezo_control_plane.model_router.router import ModelRole, ModelRouter, Route
 
 class FailingProvider:
     name = "failing"
+    models = frozenset({"first"})
 
-    async def generate(self, request: ModelRequest, model: str) -> ModelResponse:
+    async def generate(
+        self,
+        request: ModelRequest,
+        model: str,
+        *,
+        deadline_seconds: float | None = None,
+        cancellation: object = None,
+    ) -> ModelResponse:
         raise ProviderUnavailable("unavailable")
 
     async def healthy(self) -> bool:
@@ -15,8 +23,16 @@ class FailingProvider:
 
 class WorkingProvider:
     name = "working"
+    models = frozenset({"second"})
 
-    async def generate(self, request: ModelRequest, model: str) -> ModelResponse:
+    async def generate(
+        self,
+        request: ModelRequest,
+        model: str,
+        *,
+        deadline_seconds: float | None = None,
+        cancellation: object = None,
+    ) -> ModelResponse:
         return ModelResponse(provider=self.name, model=model, text="ok")
 
     async def healthy(self) -> bool:

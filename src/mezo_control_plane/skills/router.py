@@ -8,7 +8,15 @@ class SkillSelection:
 
 
 class SkillRouter:
-    def select(self, changed_paths: list[str], instruction: str) -> SkillSelection:
+    def select(
+        self,
+        changed_paths: list[str],
+        instruction: str,
+        *,
+        repository_profile: tuple[str, ...] = (),
+        risk: str = "medium",
+        corrective_edit: bool = False,
+    ) -> SkillSelection:
         names = {"clean-code-guard", "security-guard"}
         reasons = ["Production changes require generic code and security review"]
         lowered = instruction.lower()
@@ -27,4 +35,13 @@ class SkillRouter:
         if any(path.startswith(("infra/", ".github/workflows/")) for path in changed_paths):
             names.add("deployment-guard")
             reasons.append("Deployment files changed")
+        names.update(repository_profile)
+        if repository_profile:
+            reasons.append("Repository profile requires additional skills")
+        if risk in {"high", "critical"}:
+            names.add("architecture-guard")
+            reasons.append("High-risk changes require architecture review")
+        if corrective_edit:
+            names.add("test-guard")
+            reasons.append("Corrective edits require affected tests and guards to rerun")
         return SkillSelection(tuple(sorted(names)), tuple(reasons))

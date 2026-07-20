@@ -1,34 +1,26 @@
-import json
-from collections.abc import AsyncIterator, Awaitable
-from typing import Any, cast
+import asyncio
+from collections.abc import AsyncIterator
 
 from redis.asyncio import Redis
 
 from mezo_control_plane.core.domain import TaskRecord
+from mezo_control_plane.queue.consumer import TaskConsumer
+from mezo_control_plane.queue.producer import TaskProducer
 
 
 class TaskQueue:
-    _queue_name = "mezo:tasks"
-
     def __init__(self, redis: Redis) -> None:
         self._redis = redis
 
     async def enqueue(self, task: TaskRecord) -> None:
-        operation = cast(
-            Awaitable[int],
-            self._redis.rpush(self._queue_name, task.model_dump_json()),
-        )
-        await operation
+        await TaskProducer(self._redis).enqueue(task, str(task.id))
 
     async def consume(self, timeout_seconds: int = 5) -> AsyncIterator[TaskRecord]:
+        consumer = TaskConsumer(self._redis, "legacy-consumer")
         while True:
-            operation = cast(
-                Awaitable[list[Any] | None],
-                self._redis.blpop([self._queue_name], timeout=timeout_seconds),
-            )
-            item = await operation
-            if item is None:
+            claimed = await consumer.claim()
+            if claimed is None:
+                await asyncio.sleep(timeout_seconds)
                 continue
-            _, payload = item
-            decoded = payload.decode() if isinstance(payload, bytes) else payload
-            yield TaskRecord.model_validate(json.loads(decoded))
+            yield claimed.task
+            await consumer.acknowledge(claimed)

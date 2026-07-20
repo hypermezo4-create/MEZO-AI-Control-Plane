@@ -1,11 +1,20 @@
-import secrets
+from typing import Annotated, cast
 
-from fastapi import Header, HTTPException, status
+from fastapi import Depends, Request
 
-from mezo_control_plane.core.settings import get_settings
+from mezo_control_plane.application.tasks import TaskApplicationService
+from mezo_control_plane.core.settings import Settings
 
 
-async def require_api_key(x_api_key: str = Header(default="")) -> None:
-    expected = get_settings().control_plane_api_key.get_secret_value()
-    if not expected or not secrets.compare_digest(x_api_key, expected):
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid API key")
+def application_service(request: Request) -> TaskApplicationService:
+    return cast(TaskApplicationService, request.app.state.application)
+
+
+ServiceDependency = Annotated[TaskApplicationService, Depends(application_service)]
+
+
+def application_settings(request: Request) -> Settings:
+    return cast(Settings, request.app.state.settings)
+
+
+SettingsDependency = Annotated[Settings, Depends(application_settings)]

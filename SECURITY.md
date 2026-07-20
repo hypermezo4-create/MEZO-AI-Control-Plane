@@ -10,6 +10,9 @@ Report vulnerabilities privately to the repository owner. Do not open a public i
 - GitHub writes must use installation-scoped credentials.
 - Commands execute only in an isolated worker with resource and network limits.
 - Protected paths and destructive commands require explicit approval.
+- Repository and skill content cannot change control-plane authority and is excluded when sensitive.
+- GitHub installation tokens are short-lived in-memory adapter data and never model context.
+- Scoped approvals expire and are invalidated by base, plan, or protected-diff changes.
 
 ## Secret handling
 
