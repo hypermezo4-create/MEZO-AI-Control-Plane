@@ -47,8 +47,11 @@ Planner      Blind Review   Executor/Fallback
 - OpenAI-compatible Qwen provider.
 - Role-based model routing for planning, execution, review, fast work, and fallback.
 - Repository-context data contract.
-- GitHub and sandbox gateway contracts.
-- Skill selection for clean code, security, tests, documentation, concurrency, database, and deployment changes.
+- Scoped GitHub App authentication, webhook, branch, commit, checks, and Draft PR boundaries.
+- Targeted repository analysis with immutable source citations and sensitive-content exclusion.
+- Resumable bounded planner, executor, review, security-review, and final-verification workflow.
+- Non-root Docker sandbox, Fly Machines boundary, typed tool registry, and transactional patch application.
+- Versioned integrity-checked skills plus deterministic risk and approval policy enforcement.
 - Structured JSON logging.
 - Docker and Docker Compose configuration.
 - Fly.io web and worker process groups.
@@ -205,7 +208,10 @@ This repository intentionally owns orchestration and policy. It does not contain
 - `MEZO-Model-Server` owns Qwen serving, GPU configuration, health, benchmarks, and model deployment.
 - Target repositories remain separate and are accessed through a narrowly scoped GitHub App.
 
-The current worker includes the queue consumer and execution boundary. Actual GitHub App token exchange, repository checkout, remote sandbox provisioning, patch application, pull-request creation, and persistent execution evidence are the next integration layer and require the GitHub App, skills repository, model server, and deployment secrets.
+The runtime includes typed GitHub App token exchange, repository acquisition, sandbox provisioning,
+patch validation, Draft Pull Request preparation, and persistent workflow evidence. Default tests use
+controlled transports and do not perform external writes. Live GitHub App, model-server, Telegram, and
+Fly verification remain owner-triggered and require deployment secrets.
 
 ## Branch and delivery policy
 
