@@ -132,9 +132,10 @@ http://localhost:8080/health/ready
 Submit a dry-run task:
 
 ```bash
+export CONTROL_PLANE_API_KEY='set-a-local-development-key'
 curl -X POST http://localhost:8080/v1/tasks \
   -H 'Content-Type: application/json' \
-  -H 'X-API-Key: replace-me' \
+  -H "X-API-Key: ${CONTROL_PLANE_API_KEY}" \
   -d '{
     "repository": "owner/repository",
     "instruction": "Analyze the failure and prepare a safe fix",
@@ -178,7 +179,7 @@ Current verified local result for the initial scaffold:
 ```text
 Ruff: passed
 MyPy: passed across 42 source files
-Pytest: 6 passed
+Pytest: the full test suite
 ```
 
 ## Fly.io deployment

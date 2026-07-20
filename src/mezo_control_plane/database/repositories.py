@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from mezo_control_plane.core.domain import AuditEvent, EvidenceItem, TaskRecord, TaskState
 from mezo_control_plane.database.base import AuditEventRow, EvidenceRow, TaskAttemptRow, TaskRow
+from mezo_control_plane.database.evidence_writer import append_evidence_records
 
 
 class TaskRepository:
@@ -47,19 +48,13 @@ class TaskRepository:
         return task
 
     async def append_evidence(self, task_id: UUID, item: EvidenceItem) -> None:
-        if item.immutable_hash is None:
-            raise ValueError("Evidence requires an immutable hash")
         async with self._sessions.begin() as session:
-            session.add(
-                EvidenceRow(
-                    id=uuid4(),
-                    task_id=task_id,
-                    kind=item.kind,
-                    summary=item.summary,
-                    immutable_hash=item.immutable_hash,
-                    created_at=item.created_at,
-                )
+            task = await session.scalar(
+                select(TaskRow).where(TaskRow.id == task_id).with_for_update()
             )
+            if task is None:
+                raise LookupError("Task not found")
+            await append_evidence_records(session, task_id, item)
 
     async def append_audit_event(self, task_id: UUID, event: AuditEvent) -> None:
         async with self._sessions.begin() as session:

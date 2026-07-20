@@ -6,8 +6,9 @@ from uuid import UUID, uuid4
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from mezo_control_plane.core.domain import TaskState
-from mezo_control_plane.database.base import EvidenceRow, TaskAttemptRow, TaskRow
+from mezo_control_plane.core.domain import EvidenceItem, TaskState
+from mezo_control_plane.database.base import TaskAttemptRow, TaskRow
+from mezo_control_plane.database.evidence_writer import append_evidence_records
 from mezo_control_plane.queue.consumer import ClaimedTask
 from mezo_control_plane.worker.failure_classification import ExecutionFailure
 
@@ -46,7 +47,7 @@ class SqlAlchemyExecutionGateway:
                 )
             task.state = TaskState.EXECUTING.value
             task.updated_at = datetime.now(UTC)
-            self._add_evidence(
+            await self._add_evidence(
                 session,
                 delivery.task.id,
                 "queue-claim",
@@ -58,14 +59,14 @@ class SqlAlchemyExecutionGateway:
             task = await self._task_for_update(session, delivery.task.id)
             if task.state == TaskState.CANCELLED:
                 raise DurableTaskTerminalError("Cancelled task cannot be completed")
-            self._add_evidence(session, delivery.task.id, "execution-result", output)
+            await self._add_evidence(session, delivery.task.id, "execution-result", output)
             task.state = TaskState.COMPLETED.value
             task.updated_at = datetime.now(UTC)
 
     async def record_failure(self, delivery: ClaimedTask, failure: ExecutionFailure) -> None:
         async with self._sessions.begin() as session:
             task = await self._task_for_update(session, delivery.task.id)
-            self._add_evidence(
+            await self._add_evidence(
                 session,
                 delivery.task.id,
                 "execution-failure",
@@ -77,7 +78,7 @@ class SqlAlchemyExecutionGateway:
     async def record_interrupted(self, delivery: ClaimedTask, reason: str) -> None:
         async with self._sessions.begin() as session:
             task = await self._task_for_update(session, delivery.task.id)
-            self._add_evidence(session, delivery.task.id, "execution-interrupted", reason)
+            await self._add_evidence(session, delivery.task.id, "execution-interrupted", reason)
             if task.state not in {
                 TaskState.COMPLETED,
                 TaskState.FAILED,
@@ -91,7 +92,7 @@ class SqlAlchemyExecutionGateway:
     ) -> TaskState:
         async with self._sessions.begin() as session:
             task = await self._task_for_update(session, task_id)
-            self._add_evidence(
+            await self._add_evidence(
                 session,
                 task_id,
                 "lease-recovery",
@@ -118,20 +119,22 @@ class SqlAlchemyExecutionGateway:
         return task
 
     @staticmethod
-    def _add_evidence(session: AsyncSession, task_id: UUID, kind: str, summary: str) -> None:
+    async def _add_evidence(
+        session: AsyncSession, task_id: UUID, kind: str, summary: str
+    ) -> None:
         canonical = json.dumps(
             {"kind": kind, "summary": summary, "task_id": str(task_id)},
             sort_keys=True,
             separators=(",", ":"),
             ensure_ascii=True,
         ).encode()
-        session.add(
-            EvidenceRow(
-                id=uuid4(),
-                task_id=task_id,
+        await append_evidence_records(
+            session,
+            task_id,
+            EvidenceItem(
                 kind=kind,
                 summary=summary,
                 immutable_hash=hashlib.sha256(canonical).hexdigest(),
                 created_at=datetime.now(UTC),
-            )
+            ),
         )

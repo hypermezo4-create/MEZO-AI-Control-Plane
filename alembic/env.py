@@ -1,3 +1,4 @@
+import os
 from logging.config import fileConfig
 
 from sqlalchemy import engine_from_config, pool
@@ -5,8 +6,13 @@ from sqlalchemy import engine_from_config, pool
 from alembic import context
 from mezo_control_plane.database import control_records  # noqa: F401
 from mezo_control_plane.database.base import Base
+from mezo_control_plane.database.urls import sync_database_url
 
 config = context.config
+database_url = os.getenv("DATABASE_URL")
+if database_url:
+    migration_url = sync_database_url(database_url)
+    config.set_main_option("sqlalchemy.url", migration_url.replace("%", "%%"))
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 

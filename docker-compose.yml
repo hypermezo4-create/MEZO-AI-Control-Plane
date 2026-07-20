@@ -22,7 +22,7 @@ services:
         condition: service_healthy
 
   postgres:
-    image: postgres:17-alpine
+    image: postgres:17-alpine@sha256:742f40ea20b9ff2ff31db5458d127452988a2164df9e17441e191f3b72252193
     environment:
       POSTGRES_USER: mezo
       POSTGRES_PASSWORD: mezo
@@ -36,7 +36,7 @@ services:
       - postgres_data:/var/lib/postgresql/data
 
   redis:
-    image: redis:8-alpine
+    image: redis:8-alpine@sha256:9d317178eceac8454a2284a9e6df2466b93c745529947f0cd42a0fa9609d7005
     command: redis-server --save 60 1 --appendonly yes
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]

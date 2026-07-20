@@ -13,6 +13,7 @@ from mezo_control_plane.api.schemas import (
     ValidationResponse,
 )
 from mezo_control_plane.core.domain import TaskRecord, TaskRequest
+from mezo_control_plane.observability.reports import TaskReport
 
 router = APIRouter(prefix="/v1/tasks", tags=["tasks"])
 
@@ -82,6 +83,11 @@ async def evidence(
     service: ServiceDependency,
 ) -> EvidenceResponse:
     return EvidenceResponse(items=await service.evidence(task_id))
+
+
+@router.get("/{task_id}/report", response_model=TaskReport)
+async def report(task_id: UUID, service: ServiceDependency) -> TaskReport:
+    return await service.report(task_id)
 
 
 @router.get("/{task_id}/reviews")

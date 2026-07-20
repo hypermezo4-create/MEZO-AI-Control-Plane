@@ -35,6 +35,7 @@ dev = [
 [project.scripts]
 mezo-api = "mezo_control_plane.api.main:run"
 mezo-worker = "mezo_control_plane.worker.main:run"
+mezo-evals = "mezo_control_plane.evals.cli:run"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/mezo_control_plane"]

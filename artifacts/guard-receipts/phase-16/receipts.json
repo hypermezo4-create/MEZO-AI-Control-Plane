@@ -1,0 +1,342 @@
+{
+  "phase": "13-16",
+  "receipts": [
+    {
+      "commit": "f4253e666fbe18f4b591520daf75c019a521dfa4",
+      "corrections": [
+        "Normalized untrusted trace identifiers before logging.",
+        "Applied a nonce-based CSP and blocked external dashboard assets.",
+        "Pinned GitHub Actions and container bases to immutable commit or image digests.",
+        "Verified the final tree and image with Gitleaks, pip-audit, and Trivy."
+      ],
+      "evidence_commands": [
+        "docker run ... gitleaks dir /scan",
+        "uvx --from pip-audit pip-audit -r requirements.lock --no-deps --disable-pip",
+        "docker run ... trivy fs --severity HIGH,CRITICAL /repo",
+        "docker run ... trivy image --severity HIGH,CRITICAL mezo-ai-control-plane:local"
+      ],
+      "findings": [
+        {
+          "evidence": "Attacker-controlled unmatched paths were initially usable as request metric labels.",
+          "fix": "Metrics now use matched route templates and collapse all unmatched paths to __unmatched__.",
+          "path": "src/mezo_control_plane/api/middleware.py",
+          "risk": "Unbounded label cardinality could grow process memory and degrade the API.",
+          "severity": "important"
+        },
+        {
+          "evidence": "The first dashboard draft persisted the API key in sessionStorage.",
+          "fix": "The key is held only in page memory and is cleared on reload or tab close.",
+          "path": "src/mezo_control_plane/api/routes/dashboard.py",
+          "risk": "A browser-side persistence mechanism unnecessarily extended credential lifetime.",
+          "severity": "important"
+        },
+        {
+          "evidence": "A literal placeholder API key in a curl example triggered the secret scanner.",
+          "fix": "The example now reads the value from CONTROL_PLANE_API_KEY.",
+          "path": "README.md",
+          "risk": "Examples that resemble credentials reduce signal quality in secret scanning.",
+          "severity": "advisory"
+        }
+      ],
+      "result": "pass",
+      "revisit": "Any authentication, browser storage, logging, metrics-label, workflow, or dependency-source change",
+      "scope": [
+        "src/mezo_control_plane/api/middleware.py",
+        "src/mezo_control_plane/api/routes/dashboard.py",
+        "src/mezo_control_plane/observability/tracing.py",
+        ".github/workflows",
+        "Dockerfile"
+      ],
+      "skill": "security-guard",
+      "unresolved": [],
+      "version": "1.0.0"
+    },
+    {
+      "commit": "f4253e666fbe18f4b591520daf75c019a521dfa4",
+      "corrections": [
+        "Kept dashboard, metrics, alert evaluation, reports, tracing, evidence, and evals in explicit modules.",
+        "Preserved existing application service and repository boundaries instead of adding database access to the dashboard."
+      ],
+      "evidence_commands": [
+        "uv run mypy src",
+        "uv run pytest -q",
+        "uv run mezo-evals"
+      ],
+      "findings": [
+        {
+          "evidence": "The worker path originally wrote EvidenceRow directly while the application path wrote both EvidenceRow and the hash ledger.",
+          "fix": "Both paths now call one transactional append_evidence_records boundary.",
+          "path": "src/mezo_control_plane/worker/durable_execution.py",
+          "risk": "Two persistence paths could diverge and make worker evidence unverifiable.",
+          "severity": "important"
+        },
+        {
+          "evidence": "Provider, repeated-failure, and cost rules existed before their cross-process publishers were connected.",
+          "fix": "Unpublished metrics are explicitly returned as unavailable and cannot fire or appear healthy.",
+          "path": "src/mezo_control_plane/api/routes/observability.py",
+          "risk": "Substituting zero would falsely imply those signals had been measured.",
+          "severity": "advisory"
+        }
+      ],
+      "result": "pass",
+      "revisit": "When provider and cost publishers are connected across worker and API processes",
+      "scope": [
+        "src/mezo_control_plane/observability",
+        "src/mezo_control_plane/database/evidence_writer.py",
+        "src/mezo_control_plane/api/routes/observability.py",
+        "src/mezo_control_plane/evals"
+      ],
+      "skill": "architecture-guard",
+      "unresolved": [],
+      "version": "1.0.0"
+    },
+    {
+      "commit": "f4253e666fbe18f4b591520daf75c019a521dfa4",
+      "corrections": [
+        "Added typed task report, observability snapshot, alert, and Prometheus contracts.",
+        "Added contract tests for content types, authentication, CSP, report digest, unavailable metrics, and bounded unmatched-route labels."
+      ],
+      "evidence_commands": [
+        "uv run pytest -q tests/contract/test_api_contract.py",
+        "uv run python scripts/verify_deployment.py"
+      ],
+      "findings": [
+        {
+          "evidence": "A missing signal must be distinguishable from a measured zero value.",
+          "fix": "Alert evaluations include available, nullable value, and unavailable_metrics at the API boundary.",
+          "path": "src/mezo_control_plane/observability/alerts.py",
+          "risk": "Operators could interpret unavailable telemetry as a healthy measurement.",
+          "severity": "important"
+        }
+      ],
+      "result": "pass",
+      "revisit": "Any route, response schema, authentication exemption, or dashboard action change",
+      "scope": [
+        "src/mezo_control_plane/api/routes/tasks.py",
+        "src/mezo_control_plane/api/routes/health.py",
+        "src/mezo_control_plane/api/routes/observability.py",
+        "tests/contract/test_api_contract.py"
+      ],
+      "skill": "api-contract-guard",
+      "unresolved": [],
+      "version": "1.0.0"
+    },
+    {
+      "commit": "f4253e666fbe18f4b591520daf75c019a521dfa4",
+      "corrections": [
+        "Separated deterministic evaluation contracts, fixtures, runner, and CLI.",
+        "Kept verification scripts small and fail-closed.",
+        "Removed placeholder telemetry values instead of adding comments around false defaults."
+      ],
+      "evidence_commands": [
+        "uv run ruff check .",
+        "uv run mypy src",
+        "python3.12 -m compileall -q src tests scripts"
+      ],
+      "findings": [
+        {
+          "evidence": "Duplicating ledger construction in repositories and workers would couple schema details to multiple callers.",
+          "fix": "Canonical ledger writes live in evidence_writer.py and callers supply only validated EvidenceItem data.",
+          "path": "src/mezo_control_plane/database/repositories.py",
+          "risk": "Future evidence changes could update one caller but not the other.",
+          "severity": "advisory"
+        }
+      ],
+      "result": "pass",
+      "revisit": "When evidence or alert modules gain additional persistence or transport adapters",
+      "scope": [
+        "src/mezo_control_plane/observability",
+        "src/mezo_control_plane/evals",
+        "src/mezo_control_plane/database/evidence_writer.py",
+        "scripts"
+      ],
+      "skill": "clean-code-guard",
+      "unresolved": [],
+      "version": "1.0.0"
+    },
+    {
+      "commit": "f4253e666fbe18f4b591520daf75c019a521dfa4",
+      "corrections": [
+        "Added adversarial tests for label cardinality, trace redaction, ledger tampering, mixed task IDs, unavailable signals, and database URL normalization.",
+        "Added migration upgrade/downgrade assertions for evidence_ledger.",
+        "Final real-infrastructure result: 126 passed. Final eval result: 11/11 passed."
+      ],
+      "evidence_commands": [
+        "DATABASE_TEST_URL=... REDIS_TEST_URL=... uv run pytest -q",
+        "uv run mezo-evals",
+        "DATABASE_URL=postgres://... uv run alembic upgrade head",
+        "DATABASE_URL=postgres://... uv run alembic current"
+      ],
+      "findings": [
+        {
+          "evidence": "The isolated suite passed while the real PostgreSQL/Redis flow exposed an empty evidence ledger for worker-written evidence.",
+          "fix": "Added ledger assertions to the real worker flow and reran every test against pinned PostgreSQL and Redis containers.",
+          "path": "tests/integration/test_control_plane_flow.py",
+          "risk": "Mock-only confidence would have shipped an integrity gap.",
+          "severity": "important"
+        }
+      ],
+      "result": "pass",
+      "revisit": "When worker persistence, migrations, alert rules, or dashboard controls change",
+      "scope": [
+        "tests/unit/test_observability_and_evals.py",
+        "tests/contract/test_api_contract.py",
+        "tests/integration/test_control_plane_flow.py",
+        "tests/integration/test_phase_07_12_migration.py"
+      ],
+      "skill": "test-guard",
+      "unresolved": [],
+      "version": "1.0.0"
+    },
+    {
+      "commit": "f4253e666fbe18f4b591520daf75c019a521dfa4",
+      "corrections": [
+        "Added task-local unique sequence and globally unique entry hash constraints.",
+        "Verified one migration head and a real upgrade to 0003_evidence_ledger.",
+        "Kept automatic schema downgrade out of the deployment workflow."
+      ],
+      "evidence_commands": [
+        "uv run python scripts/verify_migrations.py",
+        "DATABASE_URL=postgres://... uv run alembic upgrade head",
+        "DATABASE_TEST_URL=... uv run pytest -q tests/integration"
+      ],
+      "findings": [
+        {
+          "evidence": "Worker evidence bypassed the ledger until tested with the real database.",
+          "fix": "Task-row locking and one transaction now cover the compatibility row and hash-chain entry for all durable writers.",
+          "path": "src/mezo_control_plane/worker/durable_execution.py",
+          "risk": "A completed task could contain compatibility evidence without an integrity chain.",
+          "severity": "important"
+        },
+        {
+          "evidence": "Fly/Postgres may provide postgres:// or postgresql:// while runtime and migrations require different SQLAlchemy drivers.",
+          "fix": "Central URL normalization maps common forms to asyncpg for runtime and psycopg for Alembic without logging credentials.",
+          "path": "alembic/env.py",
+          "risk": "A release migration could fail before deployment despite a valid managed database URL.",
+          "severity": "advisory"
+        }
+      ],
+      "result": "pass",
+      "revisit": "Before any destructive migration or evidence schema change",
+      "scope": [
+        "alembic/versions/0003_evidence_ledger.py",
+        "src/mezo_control_plane/database/control_records.py",
+        "src/mezo_control_plane/database/evidence_writer.py",
+        "src/mezo_control_plane/database/evidence_ledger.py",
+        "src/mezo_control_plane/database/urls.py"
+      ],
+      "skill": "database-guard",
+      "unresolved": [],
+      "version": "1.0.0"
+    },
+    {
+      "commit": "f4253e666fbe18f4b591520daf75c019a521dfa4",
+      "corrections": [
+        "Release migrations run before rolling replacement and readiness gates machine health.",
+        "Final image runs as UID 10001 and passed a read-only, no-network, capability-dropped smoke test.",
+        "Authenticated post-deploy checks cover task reads, alerts, and metrics.",
+        "No production deployment or production migration was executed."
+      ],
+      "evidence_commands": [
+        "docker build -t mezo-ai-control-plane:local .",
+        "docker run --rm --network=none --read-only --user=10001:10001 --cap-drop=ALL --security-opt=no-new-privileges --pids-limit=64 mezo-ai-control-plane:local ...",
+        "python scripts/verify_deployment.py"
+      ],
+      "findings": [
+        {
+          "evidence": "The initial manual deployment workflow could be dispatched from a non-main ref.",
+          "fix": "The job now requires refs/heads/main, exact DEPLOY confirmation, and the protected production environment.",
+          "path": ".github/workflows/deploy-fly.yml",
+          "risk": "An approved environment run could deploy code that had not been merged to the protected branch.",
+          "severity": "important"
+        },
+        {
+          "evidence": "An unpinned base and isolated build dependency resolution would weaken reproducibility.",
+          "fix": "Base images, build dependencies, runtime dependencies, Compose services, and workflow actions are pinned.",
+          "path": "Dockerfile",
+          "risk": "Identical source could produce different runtime contents over time.",
+          "severity": "advisory"
+        }
+      ],
+      "result": "pass",
+      "revisit": "Before the first production deployment and whenever Fly topology or release commands change",
+      "scope": [
+        "Dockerfile",
+        "fly.toml",
+        ".github/workflows/deploy-fly.yml",
+        ".github/workflows/security-supply-chain.yml",
+        "docker-compose.yml",
+        "docs/deployment/fly.md"
+      ],
+      "skill": "deployment-guard",
+      "unresolved": [],
+      "version": "1.0.0"
+    },
+    {
+      "commit": "f4253e666fbe18f4b591520daf75c019a521dfa4",
+      "corrections": [
+        "Documented dashboard credential handling, evidence integrity, alerts, evals, deployment, rollback, and incident runbooks.",
+        "Final readiness explicitly records that no production deployment, migration, or merge was performed."
+      ],
+      "evidence_commands": [
+        "rg -n 'unavailable_metrics|release_command|rollback|No production' docs README.md",
+        "uv run pytest -q tests/contract/test_api_contract.py"
+      ],
+      "findings": [
+        {
+          "evidence": "Documentation initially described unconnected alert inputs as zero-valued.",
+          "fix": "Documentation and API now identify those metrics as unavailable until publishers exist.",
+          "path": "docs/observability.md",
+          "risk": "Operators could infer measurement coverage that did not exist.",
+          "severity": "advisory"
+        }
+      ],
+      "result": "pass",
+      "revisit": "Whenever operational behavior, approval boundaries, or production procedures change",
+      "scope": [
+        "docs/observability.md",
+        "docs/dashboard.md",
+        "docs/evals.md",
+        "docs/deployment/fly.md",
+        "docs/operations/runbook.md",
+        "docs/final-readiness.md",
+        "README.md"
+      ],
+      "skill": "docs-guard",
+      "unresolved": [],
+      "version": "1.0.0"
+    },
+    {
+      "commit": "f4253e666fbe18f4b591520daf75c019a521dfa4",
+      "corrections": [
+        "Added 11 safe and adversarial fixtures with expected accept/reject outcomes.",
+        "CI fails if any unsafe fixture is accepted or any known-safe fixture is rejected.",
+        "No eval fixture can trigger a real tool, merge, deployment, migration, or credential change."
+      ],
+      "evidence_commands": [
+        "uv run mezo-evals",
+        "uv run pytest -q tests/unit/test_observability_and_evals.py"
+      ],
+      "findings": [
+        {
+          "evidence": "Success claims, tool names, reviewer identity, corrective rounds, protected branches, and approval-requiring actions need deterministic acceptance checks outside model prose.",
+          "fix": "The eval boundary rejects ungrounded root cause claims, unknown tools, prompt injection, self-review, unbounded loops, failed tests, protected-branch writes, and missing approvals.",
+          "path": "src/mezo_control_plane/evals/runner.py",
+          "risk": "A fluent model response could claim completion or authorize an unsafe action without evidence.",
+          "severity": "important"
+        }
+      ],
+      "result": "pass",
+      "revisit": "Whenever agent roles, tools, approval actions, reviewer policy, or completion criteria change",
+      "scope": [
+        "src/mezo_control_plane/evals",
+        "tests/unit/test_observability_and_evals.py",
+        ".github/workflows/ci.yml"
+      ],
+      "skill": "agent-system-guard",
+      "unresolved": [],
+      "version": "1.0.0"
+    }
+  ],
+  "reviewed_commit_range": "b82ec7bf642ca19b853fb4dcd051b07fd6007e7d..56975792b1169cce7a57d00a8519be6e0452b29b"
+}

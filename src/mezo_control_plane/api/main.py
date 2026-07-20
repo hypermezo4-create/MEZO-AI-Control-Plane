@@ -12,13 +12,16 @@ from mezo_control_plane.api.middleware import (
     AuditLogMiddleware,
     AuthenticationMiddleware,
     BodyLimitMiddleware,
+    MetricsMiddleware,
     RateLimitMiddleware,
     RequestIdMiddleware,
     TimeoutMiddleware,
     error_response,
 )
 from mezo_control_plane.api.routes.control import router as control_router
+from mezo_control_plane.api.routes.dashboard import router as dashboard_router
 from mezo_control_plane.api.routes.health import router as health_router
+from mezo_control_plane.api.routes.observability import router as observability_router
 from mezo_control_plane.api.routes.tasks import router as tasks_router
 from mezo_control_plane.application.errors import ApplicationError, ConflictError, NotFoundError
 from mezo_control_plane.application.tasks import TaskApplicationService
@@ -26,6 +29,7 @@ from mezo_control_plane.core.settings import Settings, get_settings
 from mezo_control_plane.database.repositories import TaskRepository
 from mezo_control_plane.database.session import create_engine, create_session_factory
 from mezo_control_plane.observability.logging import configure_logging
+from mezo_control_plane.observability.metrics import MetricsRegistry
 from mezo_control_plane.queue.cancellation import CancellationService
 from mezo_control_plane.queue.metrics import QueueMetricsCollector
 from mezo_control_plane.queue.producer import TaskProducer
@@ -37,6 +41,7 @@ def create_app(
 ) -> FastAPI:
     configuration = settings or get_settings()
     configure_logging(configuration.log_level)
+    application_metrics = MetricsRegistry()
 
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
@@ -88,7 +93,7 @@ def create_app(
             worker_health,
             configuration_health,
         )
-        app.state.metrics = metrics
+        app.state.queue_metrics = metrics
         app.state.redis = redis
         app.state.engine = engine
         yield
@@ -101,12 +106,16 @@ def create_app(
         lifespan=lifespan,
     )
     app.state.settings = configuration
+    app.state.application_metrics = application_metrics
     if application is not None:
         app.state.application = application
     app.include_router(health_router)
     app.include_router(tasks_router)
     app.include_router(control_router)
+    app.include_router(observability_router)
+    app.include_router(dashboard_router)
     app.add_middleware(AuditLogMiddleware)
+    app.add_middleware(MetricsMiddleware, registry=application_metrics)
     app.add_middleware(
         RateLimitMiddleware,
         limit=configuration.api_rate_limit_requests,

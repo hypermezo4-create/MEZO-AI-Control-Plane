@@ -4,6 +4,7 @@ from uuid import UUID
 from mezo_control_plane.application.errors import ConflictError, NotFoundError
 from mezo_control_plane.application.ports import HealthCheck, TaskStore
 from mezo_control_plane.core.domain import EvidenceItem, TaskRecord, TaskRequest, TaskState
+from mezo_control_plane.observability.reports import TaskReport, build_task_report
 from mezo_control_plane.queue.cancellation import CancellationResult, CancellationService
 from mezo_control_plane.queue.producer import EnqueueResult, TaskProducer
 
@@ -79,6 +80,10 @@ class TaskApplicationService:
     async def evidence(self, task_id: UUID) -> list[EvidenceItem]:
         await self.get_task(task_id)
         return await self._store.evidence(task_id)
+
+    async def report(self, task_id: UUID) -> TaskReport:
+        task = await self.get_task(task_id)
+        return build_task_report(task, await self._store.evidence(task_id))
 
     async def decide(self, task_id: UUID, approved: bool) -> TaskRecord:
         task = await self.get_task(task_id)

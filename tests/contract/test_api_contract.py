@@ -108,6 +108,9 @@ async def test_task_routes_and_idempotency(client: httpx.AsyncClient) -> None:
     assert (await client.get(f"/v1/tasks/{task_id}")).status_code == 200
     assert (await client.get("/v1/tasks?offset=0&limit=10")).json()["total"] == 1
     assert (await client.get(f"/v1/tasks/{task_id}/evidence")).status_code == 200
+    report = await client.get(f"/v1/tasks/{task_id}/report")
+    assert report.status_code == 200
+    assert len(report.json()["evidence_digest"]) == 64
     assert (await client.get(f"/v1/tasks/{task_id}/reviews")).status_code == 200
     assert (
         await client.post(f"/v1/tasks/{task_id}/approvals", json={"reason": "reviewed"})
@@ -135,13 +138,30 @@ async def test_validation_resources_providers_models_and_health(client: httpx.As
     assert len((await client.get("/v1/models")).json()) == 3
     assert (await client.get("/health/live")).json()["status"] == "live"
     assert (await client.get("/health/ready")).json()["status"] == "ready"
-    assert (await client.get("/metrics")).status_code == 200
+    assert (await client.get("/random-unmatched-one")).status_code == 404
+    assert (await client.get("/random-unmatched-two")).status_code == 404
+    metrics = await client.get("/metrics")
+    assert metrics.status_code == 200
+    assert "text/plain" in metrics.headers["content-type"]
+    assert "mezo_http_requests_total" in metrics.text
+    assert 'route="__unmatched__"' in metrics.text
+    assert "random-unmatched" not in metrics.text
+    assert (await client.get("/v1/observability/snapshot")).status_code == 200
+    alerts = await client.get("/v1/observability/alerts")
+    assert alerts.status_code == 200
+    alert_body = alerts.json()
+    assert "evaluations" in alert_body
+    assert "providers.unhealthy" in alert_body["unavailable_metrics"]
 
 
 async def test_authentication_validation_pagination_and_error_contract(
     api: tuple[TaskApplicationService, httpx.ASGITransport],
 ) -> None:
     async with httpx.AsyncClient(transport=api[1], base_url="http://test") as anonymous:
+        dashboard = await anonymous.get("/dashboard")
+        assert dashboard.status_code == 200
+        assert "nonce-" in dashboard.headers["content-security-policy"]
+        assert "test-control-key" not in dashboard.text
         denied = await anonymous.get("/v1/tasks")
         assert denied.status_code == 401
         assert denied.json()["error"]["code"] == "authentication_failed"
@@ -169,6 +189,7 @@ async def test_openapi_contains_every_control_route(client: httpx.AsyncClient) -
         "/v1/tasks/{task_id}/cancel",
         "/v1/tasks/{task_id}/retry",
         "/v1/tasks/{task_id}/evidence",
+        "/v1/tasks/{task_id}/report",
         "/v1/tasks/{task_id}/reviews",
         "/v1/tasks/{task_id}/approvals",
         "/v1/tasks/{task_id}/rejections",
@@ -177,6 +198,8 @@ async def test_openapi_contains_every_control_route(client: httpx.AsyncClient) -
         "/v1/providers",
         "/v1/models",
         "/v1/webhooks/github",
+        "/v1/observability/snapshot",
+        "/v1/observability/alerts",
         "/health/live",
         "/health/ready",
         "/metrics",
