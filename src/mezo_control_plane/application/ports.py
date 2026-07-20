@@ -1,0 +1,16 @@
+from collections.abc import Awaitable, Callable
+from typing import Protocol
+from uuid import UUID
+
+from mezo_control_plane.core.domain import EvidenceItem, TaskRecord, TaskState
+
+
+class TaskStore(Protocol):
+    async def create(self, task: TaskRecord, idempotency_key: str) -> TaskRecord: ...
+    async def get(self, task_id: UUID) -> TaskRecord | None: ...
+    async def list_tasks(self, offset: int, limit: int) -> tuple[list[TaskRecord], int]: ...
+    async def transition(self, task_id: UUID, state: TaskState) -> TaskRecord: ...
+    async def evidence(self, task_id: UUID) -> list[EvidenceItem]: ...
+
+
+HealthCheck = Callable[[], Awaitable[bool]]

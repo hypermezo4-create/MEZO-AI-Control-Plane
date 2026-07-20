@@ -2,10 +2,10 @@ from collections.abc import AsyncIterator
 from datetime import UTC, datetime
 from uuid import UUID, uuid4
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from mezo_control_plane.core.domain import AuditEvent, EvidenceItem, TaskRecord
+from mezo_control_plane.core.domain import AuditEvent, EvidenceItem, TaskRecord, TaskState
 from mezo_control_plane.database.base import AuditEventRow, EvidenceRow, TaskAttemptRow, TaskRow
 
 
@@ -63,6 +63,55 @@ class TaskRepository:
                     occurred_at=event.occurred_at,
                 )
             )
+
+    async def get(self, task_id: UUID) -> TaskRecord | None:
+        async with self._sessions() as session:
+            row = await session.scalar(select(TaskRow).where(TaskRow.id == task_id))
+            return self._to_record(row) if row else None
+
+    async def list_tasks(
+        self, offset: int = 0, limit: int = 50
+    ) -> tuple[list[TaskRecord], int]:
+        async with self._sessions() as session:
+            rows = await session.scalars(
+                select(TaskRow)
+                .order_by(TaskRow.created_at.desc(), TaskRow.id)
+                .offset(offset)
+                .limit(limit)
+            )
+            total = await session.scalar(select(func.count()).select_from(TaskRow))
+            return [self._to_record(row) for row in rows], int(total or 0)
+
+    async def transition(self, task_id: UUID, state: TaskState) -> TaskRecord:
+        async with self._sessions.begin() as session:
+            row = await session.scalar(
+                select(TaskRow).where(TaskRow.id == task_id).with_for_update()
+            )
+            if row is None:
+                raise LookupError("Task not found")
+            row.state = state.value
+            row.updated_at = datetime.now(UTC)
+        record = await self.get(task_id)
+        if record is None:
+            raise LookupError("Task not found after transition")
+        return record
+
+    async def evidence(self, task_id: UUID) -> list[EvidenceItem]:
+        async with self._sessions() as session:
+            rows = await session.scalars(
+                select(EvidenceRow)
+                .where(EvidenceRow.task_id == task_id)
+                .order_by(EvidenceRow.created_at, EvidenceRow.id)
+            )
+            return [
+                EvidenceItem(
+                    kind=row.kind,
+                    summary=row.summary,
+                    immutable_hash=row.immutable_hash,
+                    created_at=row.created_at,
+                )
+                for row in rows
+            ]
 
     async def stream_stale_attempts(self, before: datetime) -> AsyncIterator[UUID]:
         async with self._sessions() as session:

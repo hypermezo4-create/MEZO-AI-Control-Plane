@@ -29,11 +29,23 @@ class Settings(BaseSettings):
     model_max_retries: int = 2
     max_agent_rounds: int = 3
     max_task_concurrency: int = 2
+    api_rate_limit_requests: int = 60
+    api_rate_limit_window_seconds: int = 60
+    api_body_limit_bytes: int = 1_048_576
+    api_timeout_seconds: float = 30
+    worker_stale_seconds: int = 60
 
     github_app_id: str = ""
     github_app_private_key: SecretStr = Field(default=SecretStr(""))
     github_webhook_secret: SecretStr = Field(default=SecretStr(""))
     skills_repository: str = "hypermezo4-create/MEZO-Agent-Skills"
+    telegram_bot_token: SecretStr = Field(default=SecretStr(""))
+    telegram_allowed_user_ids: str = ""
+    telegram_allowed_chat_ids: str = ""
+    telegram_owner_ids: str = ""
+    telegram_operator_ids: str = ""
+    telegram_reviewer_ids: str = ""
+    telegram_callback_secret: SecretStr = Field(default=SecretStr(""))
 
 
 @lru_cache
