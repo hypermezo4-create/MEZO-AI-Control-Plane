@@ -209,6 +209,68 @@ class GitHubClient:
         _raise_for_status(status, headers)
         return int(payload["number"]), str(payload["html_url"])
 
+    async def repository_metadata(self, repository: str, token: str) -> dict[str, object]:
+        status, payload, headers = await self._transport.request(
+            "GET", f"/repos/{repository}", token=token
+        )
+        _raise_for_status(status, headers)
+        return {
+            "full_name": payload.get("full_name"),
+            "default_branch": payload.get("default_branch"),
+            "archived": bool(payload.get("archived", False)),
+        }
+
+    async def required_checks(
+        self, repository: str, sha: str, token: str
+    ) -> tuple[dict[str, object], ...]:
+        status, payload, headers = await self._transport.request(
+            "GET", f"/repos/{repository}/commits/{sha}/check-runs", token=token
+        )
+        _raise_for_status(status, headers)
+        return tuple(
+            {
+                "name": item.get("name"),
+                "status": item.get("status"),
+                "conclusion": item.get("conclusion"),
+            }
+            for item in payload.get("check_runs", [])
+            if isinstance(item, dict)
+        )
+
+    async def issue(self, repository: str, number: int, token: str) -> dict[str, object]:
+        status, payload, headers = await self._transport.request(
+            "GET", f"/repos/{repository}/issues/{number}", token=token
+        )
+        _raise_for_status(status, headers)
+        return {
+            "number": payload.get("number"),
+            "title": payload.get("title"),
+            "body": payload.get("body"),
+        }
+
+    async def add_evidence_comment(
+        self, repository: str, number: int, body: str, token: str
+    ) -> int:
+        status, payload, headers = await self._transport.request(
+            "POST",
+            f"/repos/{repository}/issues/{number}/comments",
+            token=token,
+            json_body={"body": body},
+        )
+        _raise_for_status(status, headers)
+        return int(payload["id"])
+
+    async def update_draft_pull_request(
+        self, repository: str, number: int, body: str, token: str
+    ) -> None:
+        status, _, headers = await self._transport.request(
+            "PATCH",
+            f"/repos/{repository}/pulls/{number}",
+            token=token,
+            json_body={"body": body},
+        )
+        _raise_for_status(status, headers)
+
     async def approve_pull_request(self, *_args: object, **_kwargs: object) -> None:
         raise GitHubError(
             GitHubFailureType.PERMISSION,

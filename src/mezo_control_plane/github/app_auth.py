@@ -7,6 +7,7 @@ import time
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from typing import Any, Protocol
 
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import padding, rsa
@@ -84,3 +85,46 @@ class InstallationTokenCache:
 
     def invalidate(self, installation_id: int) -> None:
         self._tokens.pop(installation_id, None)
+
+
+class AppAuthTransport(Protocol):
+    async def request(
+        self, method: str, path: str, *, token: str, json_body: dict[str, Any] | None = None
+    ) -> tuple[int, dict[str, Any], dict[str, str]]: ...
+
+
+class InstallationService:
+    def __init__(self, transport: AppAuthTransport, app_jwt: GitHubAppJWT) -> None:
+        self._transport = transport
+        self._jwt = app_jwt
+
+    async def discover(self, repository: str) -> int:
+        status, payload, _ = await self._transport.request(
+            "GET", f"/repos/{repository}/installation", token=self._jwt.create()
+        )
+        if status != 200 or "id" not in payload:
+            raise GitHubError(
+                GitHubFailureType.PERMISSION,
+                "GitHub App installation was not found for repository",
+                retryable=False,
+            )
+        return int(payload["id"])
+
+    async def exchange(self, installation_id: int) -> InstallationToken:
+        status, payload, _ = await self._transport.request(
+            "POST",
+            f"/app/installations/{installation_id}/access_tokens",
+            token=self._jwt.create(),
+            json_body={},
+        )
+        if status != 201:
+            raise GitHubError(
+                GitHubFailureType.AUTHENTICATION,
+                "GitHub installation token exchange failed",
+                retryable=status >= 500,
+            )
+        expires_at = datetime.fromisoformat(str(payload["expires_at"]).replace("Z", "+00:00"))
+        permissions = frozenset(
+            key for key, value in dict(payload.get("permissions", {})).items() if value != "none"
+        )
+        return InstallationToken(str(payload["token"]), expires_at, permissions)

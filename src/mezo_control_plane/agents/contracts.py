@@ -162,4 +162,3 @@ class AgentExecutionRecord(BaseModel):
     started_at: datetime
     completed_at: datetime
     failure: AgentFailure | None = None
-

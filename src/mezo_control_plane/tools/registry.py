@@ -36,6 +36,9 @@ class ToolRegistry:
             raise ValueError(f"Duplicate tool registration: {tool.name}@{tool.version}")
         self._tools[key] = tool
 
+    def registered(self) -> tuple[tuple[str, str], ...]:
+        return tuple(sorted(self._tools))
+
     async def execute(
         self,
         request: ToolCallRequest,
